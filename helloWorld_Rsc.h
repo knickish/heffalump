@@ -1,8 +1,6 @@
 #ifndef HEFFLUMP_H_
 #define HEFFLUMP_H_
 
-#include <stdint.h>
-
 #define MainForm                1000
 #define MainNameField           1000
 #define MainHelloButton         1001
@@ -23,18 +21,18 @@
 
 #define HelloAlert              1000
 #define GoodbyeAlert            1001
+#define DebugAlert1             1002
+#define DebugAlert2             1003
+#define DebugAlert3             1004
 
 #define BmpFamilyAppIcon        1000
 
-typedef struct Toot {
-    char*       author;
-    uint16_t    is_reply_to;
-    uint16_t    toot_id;
-} Toot;
+#define heffCreatorID 'HEFf'
 
+#define tootContentDBType 'Toot'
+#define tootContentDBName "HeffalumpContentDB"
 
-char* LoadToot(uint16_t toot_id);
-char* GetTootAuthor(Toot toot);
-char* GetTootText(Toot toot);
+#define tootAuthorDBType 'Auth'
+#define tootAuthorDBName "HeffalumpAuthorDB"
 
 #endif

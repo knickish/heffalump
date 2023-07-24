@@ -1,5 +1,14 @@
-#include <PalmOS.h>
+#define ERROR_CHECK_FULL
 #include "helloWorld_Rsc.h"
+#include "heffalumpTypes.h"
+#include "heffalumpStatics.h"
+#include <PalmOS.h>
+
+
+// #define HEFFALUMP_NO_DB_DEV
+#ifdef HEFFALUMP_NO_DB_DEV
+#include "helloWorldTestRsc.h"
+#endif
 
 static void SaySomething(UInt16 alertID) {
 	FormType 	*form = FrmGetActiveForm();
@@ -178,11 +187,183 @@ static void AppEventLoop(void)
 	} while (event.eType != appStopEvent);
 }
 
-static Err AppStart(void) {
-	return errNone;
+static void MakeSharedVariables(void)
+{
+	HeffalumpState *sharedVars;
+
+	sharedVars = (HeffalumpState *)MemPtrNew(sizeof(HeffalumpState));
+	MemSet(sharedVars, sizeof(HeffalumpState), 0);
+	sharedVars->current_toot = 69;
+
+	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = sharedVars;
 }
 
+static void FreeSharedVariables(void)
+{
+	DmOpenRef author = globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB);
+	DmOpenRef content = globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB);
+
+	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = NULL;
+	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = NULL;
+
+	if (author) {
+		DmCloseDatabase(author);
+
+	}
+	if (content) {
+		DmCloseDatabase(content);
+	}
+
+	HeffalumpState* sharedVars = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
+	MemPtrFree(sharedVars);
+	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = NULL;
+}
+
+static Err AppStart(void) {
+	Err e = errNone;
+
+	MakeSharedVariables();
+	HeffalumpState* state = (HeffalumpState*)(globalsSlotVal(GLOBALS_SLOT_SHARED_VARS));
+	ErrFatalDisplayIf(!state, "Steve");
+	ErrFatalDisplayIf (state->current_toot != 69, "Bob");
+
+	DmOpenRef author = globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB);
+	DmOpenRef content = globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB);
+
+	author = DmOpenDatabaseByTypeCreator(tootAuthorDBType, heffCreatorID, dmModeReadWrite);
+	if (!author) {
+		e = DmCreateDatabase(0, tootAuthorDBName, heffCreatorID, tootAuthorDBType, false);
+		if (e) {return e;}
+
+		author = DmOpenDatabaseByTypeCreator(tootAuthorDBType, heffCreatorID, dmModeReadWrite);
+		ErrFatalDisplayIf(!author, "Failed to open author DB");
+	}
+	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = author;
+
+
+	content = DmOpenDatabaseByTypeCreator(tootContentDBType, heffCreatorID, dmModeReadWrite);
+	if (!content) {
+		e = DmCreateDatabase(0, tootContentDBName, heffCreatorID, tootContentDBType, false);
+		if (e) {return e;}
+
+		content = DmOpenDatabaseByTypeCreator(tootContentDBType, heffCreatorID, dmModeReadWrite);
+		ErrFatalDisplayIf(!content, "Failed to open content DB");
+	}
+	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = content;
+
+	
+
+	#ifdef HEFFALUMP_NO_DB_DEV
+	SysRandom(1);
+	{ // add author info for test toot
+		TootAuthor* AuthorRecord;
+		TootAuthor* offsetRecord = 0;
+		TootAuthor* sample_toot_author = RandomTootAuthor();
+		
+		MemHandle newRecordH = DmNewRecord(author, 0, (UInt32)(sizeof(UInt8) + sample_toot_author->author_name_len));
+		if (newRecordH == NULL) {
+			return dmErrMemError;
+		}
+		
+		
+		AuthorRecord = MemHandleLock(newRecordH);
+		
+
+		// write the name length
+		ErrFatalDisplayIf (*&sample_toot_author->author_name_len == 0, "Author record has zero len");
+		DmWrite(
+			AuthorRecord,
+			0, 
+			&sample_toot_author->author_name_len, 
+			sizeof(UInt8)
+		);
+		
+		// write the name
+		DmWrite(
+			AuthorRecord, 
+			(UInt32) &offsetRecord->author_name, 
+			&(sample_toot_author->author_name), 
+			(UInt32) sample_toot_author->author_name_len
+		);
+		
+
+		MemHandleUnlock(newRecordH);
+		DmReleaseRecord(author ,0, true);
+		MemPtrFree(sample_toot_author);		
+	}
+
+	{ // add content for test toot
+		TootContent* offsetRecord = 0;
+		TootContent* sample_toot = RandomTootContent(1);
+		ErrFatalDisplayIf (*&sample_toot->content_len == 0, "Author record has zero len");
+		
+		MemHandle newRecordH = DmNewRecord(content, 0, sizeof(TootContent) + sample_toot->content_len - sizeof(char));
+		
+		TootContent* lockedTootHandle = MemHandleLock(newRecordH);
+
+		DmWrite(
+			lockedTootHandle, 
+			0, 
+			&sample_toot, 
+			(sizeof(TootContent) + sample_toot->content_len - sizeof(char))
+		);
+		
+
+		// DmWrite(
+		// 	lockedTootHandle, 
+		// 	(UInt32) (&offsetRecord->toot_content), 
+		// 	&(sample_toot->toot_content), 
+		// 	(UInt32) (sample_toot->content_len)
+		// );
+
+		// ErrFatalDisplayIf(true, "Here");
+
+		MemHandleUnlock(newRecordH);
+		DmReleaseRecord(content, 0, true);
+		MemPtrFree(sample_toot);
+
+		FrmCustomAlert(DebugAlert1, "Toot Content Added", NULL, NULL);
+
+	}  
+
+	{ // test that we've actually loaded things in the DB
+		ErrFatalDisplayIf (DmNumRecords(author) == 0, "No Author Records");
+		{
+			MemHandle tmp = DmGetRecord(author, 0);
+			ErrFatalDisplayIf (tmp == NULL, "Failed to retrieve record");
+			TootAuthor* author_inst = MemHandleLock(tmp);
+			ErrFatalDisplayIf (author_inst->author_name_len == 0, "Author record has zero len");
+			char* test_author_name = (char*) MemPtrNew(author_inst->author_name_len);
+			StrNCopy(test_author_name, &(author_inst->author_name), author_inst->author_name_len);
+			FrmCustomAlert(DebugAlert1, test_author_name, NULL, NULL);
+			MemHandleUnlock(tmp);
+		}
+		ErrFatalDisplayIf (DmNumRecords(content) == 0, "No Content Records");
+		{
+			MemHandle tmp = DmGetRecord(content, 0);
+			ErrFatalDisplayIf (tmp == NULL, "Failed to retrieve record");
+			TootContent* content_inst = MemHandleLock(tmp);
+			ErrFatalDisplayIf (content_inst == NULL, "Failed to lock record");
+			ErrFatalDisplayIf (content_inst->content_len == 0, "Content record has zero len");
+			char* content_str = (char*) MemPtrNew(content_inst->content_len);
+			StrNCopy(content_str, &(content_inst->toot_content), content_inst->content_len);
+			ErrFatalDisplayIf(true, content_str);
+			MemHandleUnlock(tmp);
+		}
+	}
+	#endif
+
+
+	return e;
+}
+
+// TootContent GetTootContent(UInt16 idx) {
+	
+// }
+
 static void AppStop(void) {
+
+	FreeSharedVariables();
 	FrmCloseAllForms();
 }
 
@@ -198,9 +379,6 @@ UInt32 PilotMain(UInt16 cmd, void *cmdPBP, UInt16 launchFlags) {
 		}  
 
 		FrmGotoForm(MainForm);
-		// WinDrawChars(message1, StrLen(message1), 19, 71);
-		// WinDrawChars(message2, StrLen(message2), 30, 84);
-		// WinDrawChars(message3, StrLen(message3), 45, 97);
 
 		AppEventLoop();
 
