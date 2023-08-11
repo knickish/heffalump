@@ -1,8 +1,6 @@
 #ifndef HEFFLUMP_STATICS_H_
 #define HEFFLUMP_STATICS_H_
 
-// #include <PalmOS.h>
-
 //globals (8 slots maximum, each stores a void*, zero-inited at app start)
 
 #define NUM_GLOBALS_SLOTS		8

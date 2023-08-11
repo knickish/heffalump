@@ -11,18 +11,19 @@
 TootAuthor* RandomTootAuthor() {
     UInt8 toot_author_name_len = SysRandom(0) % 40;
     if (toot_author_name_len == 0) {
-        toot_author_name_len = 1;
+        toot_author_name_len = 5;
     }
-    TootAuthor* toot_author_ptr = (TootAuthor*) MemPtrNew(sizeof(TootAuthor) + toot_author_name_len - sizeof(char));
-    toot_author_ptr->author_name_len = toot_author_name_len;
+    TootAuthor* toot_author_ptr = (TootAuthor*) MemPtrNew((UInt32)(sizeof(TootAuthor) + (UInt32)toot_author_name_len));
+    *&(toot_author_ptr->author_name_len) = toot_author_name_len;
     char c = SysRandom(0) % 200;
     if (c == 0) {
         c += 50;
     }
-    for (UInt8 i = 0; i<toot_author_name_len; i++) {
+    for (UInt16 i = 0; i<toot_author_name_len; i++) {
         
         *((&(toot_author_ptr->author_name))+i) = c;
     }
+    *((&(toot_author_ptr->author_name))+toot_author_name_len) = '\0';
     
     return toot_author_ptr;
 }
@@ -46,8 +47,8 @@ TootContent* RandomTootContent(UInt8 max) {
 
     UInt16 is_reply_to = 0;
     UInt16 toot_content_len = SysRandom(0) % 1000;
-    if (toot_content_len == 0) {
-        toot_content_len = 1;
+    if (toot_content_len <10) {
+        toot_content_len = 10;
     }
     
     TootContent* toot_content_ptr = (TootContent*) MemPtrNew(sizeof(TootContent) + toot_content_len - sizeof(char));

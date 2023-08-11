@@ -5,7 +5,7 @@
 #include <PalmOS.h>
 
 
-// #define HEFFALUMP_NO_DB_DEV
+#define HEFFALUMP_NO_DB_DEV
 #ifdef HEFFALUMP_NO_DB_DEV
 #include "helloWorldTestRsc.h"
 #endif
@@ -192,6 +192,7 @@ static void MakeSharedVariables(void)
 	HeffalumpState *sharedVars;
 
 	sharedVars = (HeffalumpState *)MemPtrNew(sizeof(HeffalumpState));
+	ErrFatalDisplayIf(!sharedVars, "Failed to allocate memory for shared variables");
 	MemSet(sharedVars, sizeof(HeffalumpState), 0);
 	sharedVars->current_toot = 69;
 
@@ -200,8 +201,8 @@ static void MakeSharedVariables(void)
 
 static void FreeSharedVariables(void)
 {
-	DmOpenRef author = globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB);
-	DmOpenRef content = globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB);
+	DmOpenRef author = globalsSlotVal(GLOBALS_SLOT_AUTHOR_DB);
+	DmOpenRef content = globalsSlotVal(GLOBALS_SLOT_CONTENT_DB);
 
 	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = NULL;
 	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = NULL;
@@ -214,21 +215,26 @@ static void FreeSharedVariables(void)
 		DmCloseDatabase(content);
 	}
 
-	HeffalumpState* sharedVars = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
-	MemPtrFree(sharedVars);
+	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
+	ErrFatalDisplayIf(!sharedVarsP, "shared variables already null");
+	ErrFatalDisplayIf(MemPtrSize(sharedVarsP) != sizeof(HeffalumpState), "shared variables wrong size");
+	ErrFatalDisplayIf(MemPtrFree(sharedVarsP)!=0, "error while freeing shared variables");
 	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = NULL;
 }
 
 static Err AppStart(void) {
 	Err e = errNone;
+	#ifdef HEFFALUMP_NO_DB_DEV
+	ErrFatalDisplayIf(MemSetDebugMode(memDebugModeCheckOnAll) != 0, "failed to set mem debug mode");
+	#endif
 
 	MakeSharedVariables();
 	HeffalumpState* state = (HeffalumpState*)(globalsSlotVal(GLOBALS_SLOT_SHARED_VARS));
-	ErrFatalDisplayIf(!state, "Steve");
-	ErrFatalDisplayIf (state->current_toot != 69, "Bob");
+	ErrFatalDisplayIf(!state, "Shared variables could not be loaded");
+	// ErrFatalDisplayIf (state->current_toot != 69, "Bob");
 
-	DmOpenRef author = globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB);
-	DmOpenRef content = globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB);
+	DmOpenRef author;
+	DmOpenRef content;
 
 	author = DmOpenDatabaseByTypeCreator(tootAuthorDBType, heffCreatorID, dmModeReadWrite);
 	if (!author) {
@@ -236,7 +242,7 @@ static Err AppStart(void) {
 		if (e) {return e;}
 
 		author = DmOpenDatabaseByTypeCreator(tootAuthorDBType, heffCreatorID, dmModeReadWrite);
-		ErrFatalDisplayIf(!author, "Failed to open author DB");
+		ErrFatalDisplayIf(author == NULL, "Failed to open author DB");
 	}
 	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = author;
 
@@ -247,108 +253,124 @@ static Err AppStart(void) {
 		if (e) {return e;}
 
 		content = DmOpenDatabaseByTypeCreator(tootContentDBType, heffCreatorID, dmModeReadWrite);
-		ErrFatalDisplayIf(!content, "Failed to open content DB");
+		ErrFatalDisplayIf(content == NULL, "Failed to open content DB");
 	}
 	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = content;
 
 	
 
 	#ifdef HEFFALUMP_NO_DB_DEV
+	// seed the random number generator 
 	SysRandom(1);
-	{ // add author info for test toot
-		TootAuthor* AuthorRecord;
-		TootAuthor* offsetRecord = 0;
+
+	if (DmNumRecords(author) == 0) { // add author info for test toot
+		FrmCustomAlert(DebugAlert1, "Generating random toot author", NULL, NULL);
 		TootAuthor* sample_toot_author = RandomTootAuthor();
-		
+		FrmCustomAlert(DebugAlert2, "Finished generating random toot author", (const char*)&(sample_toot_author->author_name), NULL);
+		// TootAuthor* offsetRecord = 0;
+
 		MemHandle newRecordH = DmNewRecord(author, 0, (UInt32)(sizeof(UInt8) + sample_toot_author->author_name_len));
-		if (newRecordH == NULL) {
-			return dmErrMemError;
+		if ((UInt32)newRecordH <1000) {
+			return DmGetLastErr();
 		}
 		
 		
-		AuthorRecord = MemHandleLock(newRecordH);
+		// TootAuthor* authorRecord = MemHandleLock(newRecordH);
+		// ErrFatalDisplayIf (authorRecord == NULL, "Unable to lock mem handle");
+		//  char* authorRecordAddress = "                                 \0";
+		//  StrIToH(authorRecordAddress, (UInt32)authorRecord);
+    	// FrmCustomAlert(DebugAlert2, "Toot Author ptr is ", authorRecordAddress, NULL);
+
+		// // write the name length
+		// ErrFatalDisplayIf (sample_toot_author->author_name_len == 0, "Author record has zero len");
+		// DmWrite(
+		// 	authorRecord,
+		// 	0, 
+		// 	&sample_toot_author,
+		// 	(UInt32)sizeof(UInt8)
+		// );
+		
+		// // write the name
+		// DmWrite(
+		// 	authorRecord, 
+		// 	(UInt32) &(offsetRecord->author_name), 
+		// 	&(sample_toot_author->author_name), 
+		// 	(UInt32) sample_toot_author->author_name_len
+		// );
 		
 
-		// write the name length
-		ErrFatalDisplayIf (*&sample_toot_author->author_name_len == 0, "Author record has zero len");
-		DmWrite(
-			AuthorRecord,
-			0, 
-			&sample_toot_author->author_name_len, 
-			sizeof(UInt8)
-		);
-		
-		// write the name
-		DmWrite(
-			AuthorRecord, 
-			(UInt32) &offsetRecord->author_name, 
-			&(sample_toot_author->author_name), 
-			(UInt32) sample_toot_author->author_name_len
-		);
-		
-
-		MemHandleUnlock(newRecordH);
+		// ErrFatalDisplayIf(MemHandleUnlock(newRecordH), "error while freeing memory");
 		DmReleaseRecord(author ,0, true);
-		MemPtrFree(sample_toot_author);		
+		ErrFatalDisplayIf(MemPtrFree(sample_toot_author)!=0, "error while freeing memory");
 	}
 
-	{ // add content for test toot
-		TootContent* offsetRecord = 0;
-		TootContent* sample_toot = RandomTootContent(1);
-		ErrFatalDisplayIf (*&sample_toot->content_len == 0, "Author record has zero len");
+	if (DmNumRecords(content) == 0) { // add content for test toot
+		// TootContent* sample_toot = RandomTootContent(1);
+		// TootContent* offsetRecord = 0;
+		// ErrFatalDisplayIf (sample_toot->content_len < 10, "Random toot contents has <10 len");
 		
-		MemHandle newRecordH = DmNewRecord(content, 0, sizeof(TootContent) + sample_toot->content_len - sizeof(char));
-		
-		TootContent* lockedTootHandle = MemHandleLock(newRecordH);
+		// UInt16 record_number = 0;
+		// MemHandle newRecordH = DmNewRecord(content, &record_number, sizeof(TootContent) + sample_toot->content_len - sizeof(char));
+		// ErrFatalDisplayIf (newRecordH == NULL, "Unable create record");
 
-		DmWrite(
-			lockedTootHandle, 
-			0, 
-			&sample_toot, 
-			(sizeof(TootContent) + sample_toot->content_len - sizeof(char))
-		);
+		// TootContent* lockedTootHandle = MemHandleLock(newRecordH);
+		// ErrFatalDisplayIf (lockedTootHandle == NULL, "Unable to lock mem handle");
+
+		// DmWrite(
+		// 	lockedTootHandle, 
+		// 	(UInt32) (&offsetRecord->author), 
+		// 	sample_toot, 
+		// 	sizeof(TootContent) - sizeof(char)
+		// );
 		
 
 		// DmWrite(
 		// 	lockedTootHandle, 
-		// 	(UInt32) (&offsetRecord->toot_content), 
+		// 	(UInt32) &offsetRecord->toot_content, 
 		// 	&(sample_toot->toot_content), 
-		// 	(UInt32) (sample_toot->content_len)
+		// 	(UInt32) sample_toot->content_len
 		// );
 
-		// ErrFatalDisplayIf(true, "Here");
+		// ErrFatalDisplayIf (lockedTootHandle->content_len == 0, "Content record has zero len");
 
-		MemHandleUnlock(newRecordH);
-		DmReleaseRecord(content, 0, true);
-		MemPtrFree(sample_toot);
+		// ErrFatalDisplayIf(MemHandleUnlock(newRecordH), "error while freeing memory");
+		// DmReleaseRecord(content, record_number, true);
+		// ErrFatalDisplayIf(MemPtrFree(sample_toot)!=0, "error while freeing memory");
 
-		FrmCustomAlert(DebugAlert1, "Toot Content Added", NULL, NULL);
+		// FrmCustomAlert(DebugAlert1, "Toot Content Added", NULL, NULL);
 
 	}  
 
 	{ // test that we've actually loaded things in the DB
-		ErrFatalDisplayIf (DmNumRecords(author) == 0, "No Author Records");
+		// ErrFatalDisplayIf (DmNumRecords(author) == 0, "No Author Records");
+		// {
+		// 	MemHandle tmp = DmGetRecord(author, 0);
+		// 	ErrFatalDisplayIf (tmp == NULL, "Failed to retrieve record");
+		// 	TootAuthor* author_inst = MemHandleLock(tmp);
+		// 	ErrFatalDisplayIf(author_inst == NULL, "error while locking memory");
+		// 	ErrFatalDisplayIf (author_inst->author_name_len == 0, "Author record has zero len");
+		// 	// char* test_author_name = (char*) MemPtrNew(author_inst->author_name_len);
+		// 	// MemSet(test_author_name, author_inst->author_name_len, 0);
+		// 	// StrNCopy(test_author_name, &(author_inst->author_name), author_inst->author_name_len -1);
+		// 	// FrmCustomAlert(DebugAlert1, test_author_name, NULL, NULL);
+		// 	// MemPtrFree(test_author_name);
+		// 	ErrFatalDisplayIf(MemHandleUnlock(tmp), "error while freeing memory");
+		// 	DmReleaseRecord(author, 0, false);
+		// }
+		// ErrFatalDisplayIf (DmNumRecords(content) == 0, "No Content Records");
 		{
-			MemHandle tmp = DmGetRecord(author, 0);
-			ErrFatalDisplayIf (tmp == NULL, "Failed to retrieve record");
-			TootAuthor* author_inst = MemHandleLock(tmp);
-			ErrFatalDisplayIf (author_inst->author_name_len == 0, "Author record has zero len");
-			char* test_author_name = (char*) MemPtrNew(author_inst->author_name_len);
-			StrNCopy(test_author_name, &(author_inst->author_name), author_inst->author_name_len);
-			FrmCustomAlert(DebugAlert1, test_author_name, NULL, NULL);
-			MemHandleUnlock(tmp);
-		}
-		ErrFatalDisplayIf (DmNumRecords(content) == 0, "No Content Records");
-		{
-			MemHandle tmp = DmGetRecord(content, 0);
-			ErrFatalDisplayIf (tmp == NULL, "Failed to retrieve record");
-			TootContent* content_inst = MemHandleLock(tmp);
-			ErrFatalDisplayIf (content_inst == NULL, "Failed to lock record");
-			ErrFatalDisplayIf (content_inst->content_len == 0, "Content record has zero len");
-			char* content_str = (char*) MemPtrNew(content_inst->content_len);
-			StrNCopy(content_str, &(content_inst->toot_content), content_inst->content_len);
-			ErrFatalDisplayIf(true, content_str);
-			MemHandleUnlock(tmp);
+			// MemHandle tmp = DmGetRecord(content, 0);
+			// ErrFatalDisplayIf (tmp == NULL, "Failed to retrieve record");
+			// TootContent* content_inst = (TootContent*) MemHandleLock(tmp);
+			// ErrFatalDisplayIf (content_inst == NULL, "Failed to lock record");
+			// ErrFatalDisplayIf (content_inst->content_len == 0, "Content record has zero len");
+			// // char* content_str = (char*) MemPtrNew(10);
+			// // MemSet(content_str, 10, 0);
+			// // StrNCopy(content_str, &(content_inst->toot_content), 9);
+			// // FrmCustomAlert(DebugAlert1, content_str, NULL, NULL);
+			// // MemPtrFree(content_str);
+			// ErrFatalDisplayIf(MemHandleUnlock(tmp), "error while freeing memory");
+			// DmReleaseRecord(content, 0, false);
 		}
 	}
 	#endif
