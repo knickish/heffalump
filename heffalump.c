@@ -67,16 +67,12 @@ static void LoadTootToGlobals(HeffalumpState* sharedVarsP, UInt16 idx) {
 
 	// clear current author
 	if (sharedVarsP->current_toot_author_ptr) {
-		FrmCustomAlert(DebugAlert1, "clearing toot author", NULL, NULL);
-		sharedVarsP->current_toot_author_ptr = NULL;
 		ErrFatalDisplayIf(MemHandleUnlock((MemHandle)sharedVarsP->current_toot_author_handle), "error while freeing memory");
 		DmReleaseRecord(author, sharedVarsP->current_toot_author_record, false);
 	}
 
 	// clear current content
 	if (sharedVarsP->current_toot_content_ptr) {
-		FrmCustomAlert(DebugAlert1, "clearing toot content", NULL, NULL);
-		sharedVarsP->current_toot_content_ptr = NULL;
 		ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_content_handle), "error while freeing memory");
 		DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
 	}
@@ -114,19 +110,34 @@ static void changeToot(FormType* form, FieldType* content, Boolean next, Boolean
 		}
 	}
 	if (sharedVarsP->current_toot_content_record != NewToot || initial) {
-		FldSetTextHandle(content, NULL);
-
-		FrmCustomAlert(DebugAlert1, "Loading new toot to globals", NULL, NULL);
-		if (initial) {FrmCustomAlert(DebugAlert1, "initial load", NULL, NULL);}
 		LoadTootToGlobals(sharedVarsP, NewToot);
 		if (NewToot == sharedVarsP->current_toot_content_record && form != NULL) {
+			
+
 			FrmCopyLabel(form, MainAuthorLabel, sharedVarsP->current_toot_author_ptr->author_name);
-			FldSetText(
-				content,
-				sharedVarsP->current_toot_content_handle, 
-				offsetof(TootContent, toot_content),
-				sharedVarsP->current_toot_content_ptr->content_len+1
+
+			MemHandle content_handle = FldGetTextHandle(content);
+			FldSetTextHandle(content, NULL);
+
+			if(!content_handle) {
+				content_handle = MemHandleNew(sharedVarsP->current_toot_content_ptr->content_len);
+			} else {
+				ErrFatalDisplayIf(
+					MemHandleResize(content_handle, sharedVarsP->current_toot_content_ptr->content_len) != 0,
+					"failed to resize content handle"
+				);
+			}
+						
+			char* content_str = (char*) MemHandleLock(content_handle);
+			MemSet(content_str, sharedVarsP->current_toot_content_ptr->content_len, 0);
+			ErrFatalDisplayIf(!content_str, "failed to lock handle");
+			StrNCopy(
+				content_str, 
+				(const char*)&(sharedVarsP->current_toot_content_ptr->toot_content), 
+				sharedVarsP->current_toot_content_ptr->content_len -1
 			);
+			MemPtrUnlock(content_str);
+			FldSetTextHandle(content, content_handle);
 			FldDrawField(content);
 		}
 	}
@@ -181,8 +192,16 @@ static Boolean MainFormHandleEvent(EventType* event) {
 		case frmOpenEvent:
 			form = FrmGetActiveForm();
 			FrmDrawForm(form);
-			// FrmSetFocus(form, FrmGetObjectIndex(form, MainNameField));
 			changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), false, true);
+			handled = true;
+			break;
+		case frmCloseEvent:
+			form = FrmGetActiveForm();
+			FieldType* content_field = FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField));
+			MemHandle content_handle = FldGetTextHandle(content_field);
+			FldSetTextHandle(content_field, NULL);
+			ErrNonFatalDisplayIf(!MemHandleFree(content_handle), "failed to free handle")
+			
 			handled = true;
 			break;
 		case keyDownEvent:
@@ -297,6 +316,8 @@ static void MakeSharedVariables(void)
 	MemSet(sharedVars, sizeof(HeffalumpState), 0);
 
 	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = sharedVars;
+	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = NULL;
+	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = NULL;
 }
 
 static void FreeSharedVariables(void)
@@ -306,18 +327,17 @@ static void FreeSharedVariables(void)
 
 	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
 	ErrFatalDisplayIf(!sharedVarsP, "shared variables already null");
-	if (sharedVarsP->current_toot_author_ptr != NULL) {
+	if (sharedVarsP->current_toot_author_handle != NULL) {
 		sharedVarsP->current_toot_author_ptr = NULL;
-		ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_author_handle)!=0, "error while freeing toot author ptr");
+		ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_author_handle)!=0, "error while freeing toot author handle");
 		DmReleaseRecord(author, sharedVarsP->current_toot_author_record, false);
 	}
-	if (sharedVarsP->current_toot_content_ptr != NULL) {
+	if (sharedVarsP->current_toot_content_handle != NULL) {
 		sharedVarsP->current_toot_content_ptr = NULL;
-		ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_content_handle)!=0, "error while freeing toot author ptr");
+		ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_content_handle)!=0, "error while freeing toot content handle");
 		DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
 	}
 
-	ErrFatalDisplayIf(MemPtrSize(sharedVarsP) != sizeof(HeffalumpState), "shared variables wrong size");
 	ErrFatalDisplayIf(MemPtrFree(sharedVarsP)!=0, "error while freeing shared variables");
 	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = NULL;
 
@@ -325,14 +345,18 @@ static void FreeSharedVariables(void)
 	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = NULL;
 
 	if (author) {
-		Err close_error = DmCloseDatabase(author);
-		ErrFatalDisplayIf(close_error != 0, "error closeing db");
+		ErrFatalDisplayIf(DmCloseDatabase(author) != errNone, "error closeing db");
 	}
 	if (content) {
-		DmCloseDatabase(content);
+		ErrFatalDisplayIf(DmCloseDatabase(content) != errNone, "error closeing db");
 	}
-
 	
+}
+
+static void AppStop(void) {
+	FreeSharedVariables();
+
+	FrmCloseAllForms();
 }
 
 static Err AppStart(void) {
@@ -344,7 +368,6 @@ static Err AppStart(void) {
 	MakeSharedVariables();
 	HeffalumpState* state = (HeffalumpState*)(globalsSlotVal(GLOBALS_SLOT_SHARED_VARS));
 	ErrFatalDisplayIf(!state, "Shared variables could not be loaded");
-	// ErrFatalDisplayIf (state->current_toot != 69, "Bob");
 
 	DmOpenRef author;
 	DmOpenRef content;
@@ -373,29 +396,24 @@ static Err AppStart(void) {
 	
 
 	#ifdef HEFFALUMP_NO_DB_DEV
-	
-
-
 	if (DmNumRecords(author) == 0 && DmNumRecords(content) == 0) { // add info for test toots
 		// seed the random number generator 
 		SysRandom(1);
-		UInt16 toot_count = 5;
+		UInt16 toot_count = 2;
 		
 
 		for (UInt16 toot_index = 0; toot_index<toot_count;toot_index++) {
 			//test author
 			{
-				FrmCustomAlert(DebugAlert1, "Generating random toot author", NULL, NULL);
 				TootAuthor* sample_toot_author = RandomTootAuthor();
 				ErrFatalDisplayIf (sample_toot_author == NULL, "failed to get toot_author");
-				FrmCustomAlert(DebugAlert1, "Finished generating random toot author", NULL, NULL);
 
 				UInt32 toot_author_struct_bytes = sizeof(TootAuthor) + (UInt32)(sample_toot_author->author_name_len) + sizeof(char);
 				UInt16 index = toot_index;
 
 				MemHandle newRecordH = DmNewRecord(author, &index, toot_author_struct_bytes);
 				if (index != toot_index) {
-					FrmCustomAlert(DebugAlert1, "Record not at index 0", NULL, NULL);
+					FrmCustomAlert(DebugAlert1, "Record not at expected index", NULL, NULL);
 				}
 				if (newRecordH == NULL) {
 					return DmGetLastErr();
@@ -419,8 +437,6 @@ static Err AppStart(void) {
 			// test content
 			{
 				TootContent* sample_toot = RandomTootContent(1);
-				
-				FrmCustomAlert(DebugAlert1, "Finished generating random toot", NULL, NULL);
 				ErrFatalDisplayIf (sample_toot->content_len < 10, "Random toot contents has <10 len");
 				
 				UInt16 record_number = toot_index;
@@ -442,8 +458,6 @@ static Err AppStart(void) {
 				ErrFatalDisplayIf(MemHandleUnlock(newRecordH), "error while freeing memory");
 				DmReleaseRecord(content, record_number, true);
 				ErrFatalDisplayIf(MemPtrFree(sample_toot)!=0, "error while freeing memory");
-
-				FrmCustomAlert(DebugAlert1, "Toot Content Added", NULL, NULL);
 			}
 		}
 	}
@@ -459,7 +473,6 @@ static Err AppStart(void) {
 			char* test_author_name = (char*) MemPtrNew(author_inst->author_name_len);
 			MemSet(test_author_name, author_inst->author_name_len, 0);
 			StrNCopy(test_author_name, (const char*)&(author_inst->author_name), author_inst->author_name_len -1);
-			FrmCustomAlert(DebugAlert1, test_author_name, NULL, NULL);
 			MemPtrFree(test_author_name);
 			ErrFatalDisplayIf(MemHandleUnlock(tmp), "error while freeing memory");
 			DmReleaseRecord(author, 0, false);
@@ -474,22 +487,15 @@ static Err AppStart(void) {
 			char* content_str = (char*) MemPtrNew(10);
 			MemSet(content_str, 10, 0);
 			StrNCopy(content_str,  (const char*)&(content_inst->toot_content), 9);
-			FrmCustomAlert(DebugAlert1, content_str, NULL, NULL);
 			MemPtrFree(content_str);
 			ErrFatalDisplayIf(MemHandleUnlock(tmp), "error while freeing memory");
 			DmReleaseRecord(content, 0, false);
 		}
+		FrmCustomAlert(DebugAlert1, "Added Examples Toots", NULL, NULL);
 	}
-	#endif
+	#endif // HEFFALUMP_NO_DB_DEV
 
-	FrmCustomAlert(DebugAlert1, "Completed AppStart", NULL, NULL);
 	return e;
-}
-
-static void AppStop(void) {
-
-	FreeSharedVariables();
-	FrmCloseAllForms();
 }
 
 UInt32 PilotMain(UInt16 cmd, void *cmdPBP, UInt16 launchFlags) {

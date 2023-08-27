@@ -9,6 +9,7 @@
 #define MainRepostButton        1004
 #define MainPrevButton          1005
 #define MainNextButton          1006
+#define MainContentSize         250
 
 
 #define MainMenuBar             1000
@@ -24,8 +25,6 @@
 #define AboutForm               1001
 #define AboutOKButton           1000
 
-#define HelloAlert              1000
-#define GoodbyeAlert            1001
 #define DebugAlert1             1002
 #define DebugAlert2             1003
 #define DebugAlert3             1004

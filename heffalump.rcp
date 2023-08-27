@@ -40,14 +40,14 @@ BEGIN
     FIELD ID MainContentField AT (PrevLeft PrevBottom 151 110) 
         NONEDITABLE
         MULTIPLELINES
-        MAXCHARS 250
+        MAXCHARS MainContentSize
 
-    BUTTON "Like" ID MainLikeButton
-        AT (1 147 AUTO AUTO)
-    BUTTON "Reply" ID MainReplyButton
-        AT (PrevRight+5 PrevTop AUTO AUTO)
-    BUTTON "Repost" ID MainRepostButton
-        AT (PrevRight+5 PrevTop AUTO AUTO)
+//    BUTTON "Like" ID MainLikeButton
+//        AT (1 147 AUTO AUTO)
+//    BUTTON "Reply" ID MainReplyButton
+//        AT (PrevRight+5 PrevTop AUTO AUTO)
+//    BUTTON "Repost" ID MainRepostButton
+//        AT (PrevRight+5 PrevTop AUTO AUTO)
     BUTTON "\001" ID MainPrevButton
         AT (142 143 AUTO AUTO)
         NOFRAME
@@ -60,19 +60,19 @@ END
 
 MENU ID MainMenuBar
 BEGIN
-    PULLDOWN "Edit"
-    BEGIN
-        MENUITEM "Undo"             EditUndo            "U"
-        MENUITEM "Cut"              EditCut             "X"
-        MENUITEM "Copy"             EditCopy            "C"
-        MENUITEM "Paste"            EditPaste           "P"
-        MENUITEM "SelectAll"        EditSelectAll       "S"
-        MENUITEM "-"                AUTOID
-        MENUITEM "Keyboard"         EditKeyboard        "K"
-        #ifdef PALMOS_GE_V_2
-        MENUITEM "Graffiti Help"    EditGraffitiHelp    "G"
-        #endif
-    END
+//    PULLDOWN "Edit"
+//    BEGIN
+//        MENUITEM "Undo"             EditUndo            "U"
+//        MENUITEM "Cut"              EditCut             "X"
+//        MENUITEM "Copy"             EditCopy            "C"
+//        MENUITEM "Paste"            EditPaste           "P"
+//        MENUITEM "SelectAll"        EditSelectAll       "S"
+//        MENUITEM "-"                AUTOID
+//        MENUITEM "Keyboard"         EditKeyboard        "K"
+//        #ifdef PALMOS_GE_V_2
+//        MENUITEM "Graffiti Help"    EditGraffitiHelp    "G"
+//        #endif
+//    END
     PULLDOWN "Options"
     BEGIN
         MENUITEM "About Hello World 2" OptionsAboutHelloWorld2
