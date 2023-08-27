@@ -1,6 +1,4 @@
-#include "helloWorld_Rsc.h"
-DATA "code" ID 1 "code0001.bin"
-
+#include "heffalumpRsc.h"
 HEX "code" ID 0
 	0x00 0x00 0x00 0x24		//4 + bytesOfGlobals
 	0x00 0x00 0x00 0x00
@@ -21,6 +19,7 @@ HEX "data" ID 0
 	0x00 0x00 0x00 0x00		//offset to start of "initing"
 	0x00					//END of init data
 
+DATA "code" ID 1 "code0001.bin"
 
 APPLICATIONICONNAME ID 100 "Heffalump"
 APPLICATION         ID 1 "LFhe"
@@ -37,14 +36,26 @@ MENUID MainMenuBar
 USABLE
 BEGIN
     TITLE "Heffalump"
-    LABEL "Enter your name below:" AUTOID at (0 17) FONT 1
-    FIELD ID MainNameField AT (PrevLeft PrevBottom 159 13)
-        UNDERLINED AUTOSHIFT MAXCHARS 40
-    BUTTON "Say Hello" ID MainHelloButton
+    LABEL "                                        " ID MainAuthorLabel AT (3 17) FONT 1
+    FIELD ID MainContentField AT (PrevLeft PrevBottom 151 110) 
+        NONEDITABLE
+        MULTIPLELINES
+        MAXCHARS 250
+
+    BUTTON "Like" ID MainLikeButton
         AT (1 147 AUTO AUTO)
-    BUTTON "Say Goodbye" ID MainGoodbyeButton
+    BUTTON "Reply" ID MainReplyButton
         AT (PrevRight+5 PrevTop AUTO AUTO)
-    GRAFFITISTATEINDICATOR AT (140 PrevTop)
+    BUTTON "Repost" ID MainRepostButton
+        AT (PrevRight+5 PrevTop AUTO AUTO)
+    BUTTON "\001" ID MainPrevButton
+        AT (142 143 AUTO AUTO)
+        NOFRAME
+        FONT 5
+    BUTTON "\002" ID MainNextButton
+        AT (142 PrevBottom-1 AUTO AUTO)
+        NOFRAME
+        FONT 5
 END
 
 MENU ID MainMenuBar
@@ -76,22 +87,6 @@ BEGIN
     LABEL "ABOUT HELLO WORLD 2" AUTOID AT (37 18) FONT 2
     LABEL "Compiled with with gcc 9.1 and PilRC 3.2" AUTOID AT (37 32)
     BUTTON "OK" AboutOKButton AT (58 134 40 12)
-END
-
-ALERT ID HelloAlert
-    INFORMATION
-BEGIN
-    TITLE "Hello, world"
-    MESSAGE "Good day to you, ^1."
-    BUTTONS "OK"
-END
-
-ALERT ID GoodbyeAlert
-    INFORMATION
-BEGIN
-    TITLE       "Goodbye, world"
-    MESSAGE    "Fare thee well, ^1."
-    BUTTONS     "OK"
 END
 
 ALERT ID DebugAlert1

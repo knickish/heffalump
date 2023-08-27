@@ -2,9 +2,14 @@
 #define HEFFLUMP_H_
 
 #define MainForm                1000
-#define MainNameField           1000
-#define MainHelloButton         1001
-#define MainGoodbyeButton       1002
+#define MainAuthorLabel         1000
+#define MainContentField        1001
+#define MainLikeButton          1002
+#define MainReplyButton         1003
+#define MainRepostButton        1004
+#define MainPrevButton          1005
+#define MainNextButton          1006
+
 
 #define MainMenuBar             1000
 #define EditUndo                1000

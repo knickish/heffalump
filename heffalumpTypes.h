@@ -4,27 +4,25 @@
 #include <PalmOS.h>
 #include <stdint.h>
 
-typedef struct HeffalumpState_s {
-    UInt16      current_toot;
-} HeffalumpState;
-
 typedef struct TootContent_s {
     UInt16  author;
     UInt16  is_reply_to;
     UInt16  content_len;
-    char   toot_content;
+    char    toot_content[];
 } TootContent;
 
 typedef struct TootAuthor_s {
     UInt8 author_name_len;
-    char  author_name;
+    char  author_name[];
 } TootAuthor;
 
-// must free content ptr
-TootContent GetTootContent(UInt16 idx);
-void CleanupLoadedTootContent(TootContent toot);
-
-TootAuthor GetTootAuthor(TootContent toot);
-void CleanupLoadedTootAuthor(TootAuthor author);
+typedef struct HeffalumpState_s {
+    UInt16          current_toot_author_record;
+    UInt16          current_toot_content_record;
+    MemHandle       current_toot_author_handle;
+    MemHandle       current_toot_content_handle;
+    TootAuthor*     current_toot_author_ptr;
+    TootContent*    current_toot_content_ptr;
+} HeffalumpState;
 
 #endif
