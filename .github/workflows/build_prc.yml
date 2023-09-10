@@ -1,0 +1,25 @@
+on:
+  push:
+    branches:
+      - 'master'
+
+jobs:
+  build-prc:
+        runs-on: ubuntu-latest
+        steps:
+        - name: Checkout
+          uses: actions/checkout@v3
+        - name: Build 
+          run: |
+              mkdir -p /tmp/heffalump_artifacts
+              docker pull knickish/palm_docker:latest
+              docker run \
+                  -v /tmp/heffalump_artifacts:/artifacts \
+                  -v .:/palm/Src \
+                  -e PRC_NAME="heffalump" \
+                  -e PRC_CREATOR="HEFf" \
+                  knickish/palm_docker:latest
+        - uses: actions/upload-artifact@v3
+          with:
+            name: heffalump.prc
+            path: /tmp/heffalump_artifacts/heffalump.prc
