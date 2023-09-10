@@ -22,7 +22,7 @@ HEX "data" ID 0
 DATA "code" ID 1 "code0001.bin"
 
 APPLICATIONICONNAME ID 100 "Heffalump"
-APPLICATION         ID 1 "LFhe"
+APPLICATION         ID 1 "HEFf"
 VERSION             ID 1 "1.0.0gcc"
 
 ICONFAMILY "largeicon_1bpp.bmp" "" "" "" TRANSPARENT 0 255 0

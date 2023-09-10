@@ -6,7 +6,7 @@
 #include <stddef.h>
 
 
-#define HEFFALUMP_NO_DB_DEV
+// #define HEFFALUMP_NO_DB_DEV
 #ifdef HEFFALUMP_NO_DB_DEV
 #include "heffalumpTestRsc.h"
 #endif
@@ -51,6 +51,7 @@ static void LoadTootToGlobals(HeffalumpState* sharedVarsP, UInt16 idx) {
 	DmOpenRef content = globalsSlotVal(GLOBALS_SLOT_CONTENT_DB);
 	DmOpenRef author = globalsSlotVal(GLOBALS_SLOT_AUTHOR_DB);
 	ErrFatalDisplayIf (!sharedVarsP || !author || !content, "Invalid globals state");
+	ErrFatalDisplayIf (!DmNumRecords(content) || !DmNumRecords(author), "No toots to read");
 
 	// attempt to lock new content, if it's not available, do nothing and return
 	if (idx >= DmNumRecords(content)) {
@@ -361,9 +362,6 @@ static void AppStop(void) {
 
 static Err AppStart(void) {
 	Err e = errNone;
-	#ifdef HEFFALUMP_NO_DB_DEV
-	ErrFatalDisplayIf(MemSetDebugMode(memDebugModeCheckOnAll) != 0, "failed to set mem debug mode");
-	#endif
 
 	MakeSharedVariables();
 	HeffalumpState* state = (HeffalumpState*)(globalsSlotVal(GLOBALS_SLOT_SHARED_VARS));
@@ -460,6 +458,7 @@ static Err AppStart(void) {
 				ErrFatalDisplayIf(MemPtrFree(sample_toot)!=0, "error while freeing memory");
 			}
 		}
+		FrmCustomAlert(DebugAlert1, "Added Examples Toots", NULL, NULL);
 	}
 
 	{ // test that we've actually loaded things in the DB
@@ -491,7 +490,6 @@ static Err AppStart(void) {
 			ErrFatalDisplayIf(MemHandleUnlock(tmp), "error while freeing memory");
 			DmReleaseRecord(content, 0, false);
 		}
-		FrmCustomAlert(DebugAlert1, "Added Examples Toots", NULL, NULL);
 	}
 	#endif // HEFFALUMP_NO_DB_DEV
 
