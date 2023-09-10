@@ -114,7 +114,7 @@ static void changeToot(FormType* form, FieldType* content, Boolean next, Boolean
 		LoadTootToGlobals(sharedVarsP, NewToot);
 		if (NewToot == sharedVarsP->current_toot_content_record && form != NULL) {
 			
-
+			FrmCopyLabel(form, MainAuthorLabel, "                                        "); // blank out the label
 			FrmCopyLabel(form, MainAuthorLabel, sharedVarsP->current_toot_author_ptr->author_name);
 
 			MemHandle content_handle = FldGetTextHandle(content);
