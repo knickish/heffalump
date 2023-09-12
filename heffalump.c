@@ -96,6 +96,15 @@ static void LoadTootToGlobals(HeffalumpState* sharedVarsP, UInt16 idx) {
 	
 }
 
+static void SetLabelInForm(FormType *form, UInt16 labelID, const char *newText)
+{
+  UInt16 labelObjectIndex = FrmGetObjectIndex(form, labelID);
+
+  FrmHideObject(form, labelObjectIndex);
+  FrmCopyLabel(form, labelID, newText);
+  FrmShowObject(form, labelObjectIndex);
+}
+
 static void changeToot(FormType* form, FieldType* content, Boolean next, Boolean initial) {
 	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
 	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
@@ -113,9 +122,7 @@ static void changeToot(FormType* form, FieldType* content, Boolean next, Boolean
 	if (sharedVarsP->current_toot_content_record != NewToot || initial) {
 		LoadTootToGlobals(sharedVarsP, NewToot);
 		if (NewToot == sharedVarsP->current_toot_content_record && form != NULL) {
-			
-			FrmCopyLabel(form, MainAuthorLabel, "                                        "); // blank out the label
-			FrmCopyLabel(form, MainAuthorLabel, sharedVarsP->current_toot_author_ptr->author_name);
+			SetLabelInForm(form, MainAuthorLabel, sharedVarsP->current_toot_author_ptr->author_name);
 
 			MemHandle content_handle = FldGetTextHandle(content);
 			FldSetTextHandle(content, NULL);
