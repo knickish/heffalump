@@ -60,19 +60,19 @@ END
 
 MENU ID MainMenuBar
 BEGIN
-//    PULLDOWN "Edit"
-//    BEGIN
+    PULLDOWN "Edit"
+    BEGIN
 //        MENUITEM "Undo"             EditUndo            "U"
 //        MENUITEM "Cut"              EditCut             "X"
-//        MENUITEM "Copy"             EditCopy            "C"
+        MENUITEM "Copy"             EditCopy            "C"
 //        MENUITEM "Paste"            EditPaste           "P"
-//        MENUITEM "SelectAll"        EditSelectAll       "S"
+        MENUITEM "SelectAll"        EditSelectAll       "S"
 //        MENUITEM "-"                AUTOID
 //        MENUITEM "Keyboard"         EditKeyboard        "K"
 //        #ifdef PALMOS_GE_V_2
 //        MENUITEM "Graffiti Help"    EditGraffitiHelp    "G"
 //        #endif
-//    END
+    END
     PULLDOWN "Options"
     BEGIN
         MENUITEM "About Hello World 2" OptionsAboutHelloWorld2

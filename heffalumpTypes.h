@@ -25,4 +25,24 @@ typedef struct HeffalumpState_s {
     TootContent*    current_toot_content_ptr;
 } HeffalumpState;
 
+enum TootWriteType {
+    Favorite = 0,
+    Follow = 1,
+    Reblog = 2,
+    Toot = 3,
+    // to ensure the values chosen are < of size u8::MAX
+    DoNotUse = 0xFF
+};
+
+typedef union {
+    UInt16 favorite;
+    UInt16 reblog;
+    UInt16 follow;
+    TootContent toot;
+} TootWriteContent;
+
+typedef struct {
+    UInt8 type;
+    TootWriteContent content;
+} TootWrite;
 #endif

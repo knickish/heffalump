@@ -154,20 +154,20 @@ static void changeToot(FormType* form, FieldType* content, Boolean next, Boolean
 static Boolean MainMenuHandleEvent(UInt16 menuID) {
 	Boolean 	handled = false;
 	FormType 	*form;
-	// FieldType	*field;
+	FieldType	*field;
 
 	form = FrmGetActiveForm();
-	// field = FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField));
+	field = FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField));
 
 	switch (menuID) {
 		// case EditUndo:
 		// case EditCut:
-		// case EditCopy:
+		case EditCopy:
 		// case EditPaste:
-		// case EditSelectAll:
+		case EditSelectAll:
 		// case EditKeyboard:
-		// 	handled = HandleEditOptions(menuID, field);
-		// 	break;
+			handled = HandleEditOptions(menuID, field);
+			break;
 
 		// #ifdef PALMOS_GE_V_2
 		// case EditGrafittiHelp:
@@ -326,12 +326,14 @@ static void MakeSharedVariables(void)
 	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = sharedVars;
 	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = NULL;
 	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = NULL;
+	*globalsSlotPtr(GLOBALS_SLOT_WRITES_DB) = NULL;
 }
 
 static void FreeSharedVariables(void)
 {
 	DmOpenRef author = globalsSlotVal(GLOBALS_SLOT_AUTHOR_DB);
 	DmOpenRef content = globalsSlotVal(GLOBALS_SLOT_CONTENT_DB);
+	DmOpenRef writes = globalsSlotVal(GLOBALS_SLOT_WRITES_DB);
 
 	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
 	ErrFatalDisplayIf(!sharedVarsP, "shared variables already null");
@@ -351,19 +353,22 @@ static void FreeSharedVariables(void)
 
 	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = NULL;
 	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = NULL;
+	*globalsSlotPtr(GLOBALS_SLOT_WRITES_DB) = NULL;
 
 	if (author) {
-		ErrFatalDisplayIf(DmCloseDatabase(author) != errNone, "error closeing db");
+		ErrFatalDisplayIf(DmCloseDatabase(author) != errNone, "error closing db");
 	}
 	if (content) {
-		ErrFatalDisplayIf(DmCloseDatabase(content) != errNone, "error closeing db");
+		ErrFatalDisplayIf(DmCloseDatabase(content) != errNone, "error closing db");
+	}
+	if (writes) {
+		ErrFatalDisplayIf(DmCloseDatabase(writes) != errNone, "error closing db");
 	}
 	
 }
 
 static void AppStop(void) {
 	FreeSharedVariables();
-
 	FrmCloseAllForms();
 }
 
@@ -376,6 +381,7 @@ static Err AppStart(void) {
 
 	DmOpenRef author;
 	DmOpenRef content;
+	DmOpenRef writes;
 
 	author = DmOpenDatabaseByTypeCreator(tootAuthorDBType, heffCreatorID, dmModeReadWrite);
 	if (!author) {
@@ -397,6 +403,16 @@ static Err AppStart(void) {
 		ErrFatalDisplayIf(content == NULL, "Failed to open content DB");
 	}
 	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = content;
+
+	writes = DmOpenDatabaseByTypeCreator(tootWritesDBType, heffCreatorID, dmModeReadWrite);
+	if (!writes) {
+		e = DmCreateDatabase(0, tootWritesDBName, heffCreatorID, tootWritesDBType, false);
+		if (e) {return e;}
+
+		writes = DmOpenDatabaseByTypeCreator(tootWritesDBType, heffCreatorID, dmModeReadWrite);
+		ErrFatalDisplayIf(writes == NULL, "Failed to open content DB");
+	}
+	*globalsSlotPtr(GLOBALS_SLOT_WRITES_DB) = writes;
 
 	
 
@@ -505,9 +521,6 @@ static Err AppStart(void) {
 
 UInt32 PilotMain(UInt16 cmd, void *cmdPBP, UInt16 launchFlags) {
 	EventType event;
-	char *message1 = "This application was built only";
-	char *message2 = "with gcc 9.1 and PilRC 3.2";
-	char *message3 = "on Ubuntu 20.04!";
 
 	if (sysAppLaunchCmdNormalLaunch == cmd) {
 		if (AppStart()) {

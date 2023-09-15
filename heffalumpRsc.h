@@ -39,4 +39,7 @@
 #define tootAuthorDBType 'Auth'
 #define tootAuthorDBName "HeffalumpAuthorDB"
 
+#define tootWritesDBType 'Writ'
+#define tootWritesDBName "HeffalumpWritesDB"
+
 #endif
