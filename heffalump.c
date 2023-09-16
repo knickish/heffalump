@@ -151,6 +151,66 @@ static void changeToot(FormType* form, FieldType* content, Boolean next, Boolean
 	}
 }
 
+static void Favorite(HeffalumpState* sharedVarsP, action TootWriteType, TootContent* content) {
+	DmOpenRef writes = globalsSlotVal(GLOBALS_SLOT_WRITES_DB);
+	if (!writes) return;
+	UInt16 size;
+	TootWrite* to_write = NULL;
+
+	to_write->type = action;
+
+	switch (action) {
+		case 0: // favorite
+			size = sizeof(UInt8)+sizeof(UInt16);
+			to_write = (TootWrite*) MemPtrNew(size);
+			to_write->type = action;
+			to_write->content->favorite = sharedVarsP->current_toot_content_record;
+			break;
+		case 1: // reblog
+			size = sizeof(UInt8)+sizeof(UInt16);
+			to_write = (TootWrite*) MemPtrNew(size);
+			to_write->type = action;
+			to_write->content->reblog = sharedVarsP->current_toot_content_record;
+			break;
+		case 2: // follow
+			size = sizeof(UInt8)+sizeof(UInt16);
+			to_write = (TootWrite*) MemPtrNew(size);
+			to_write->type = action;
+			to_write->content->follow = sharedVarsP->current_toot_author_record;
+			break;
+		case 3: // toot
+			if (!content) return;
+			size = sizeof(UInt8)+sizeof(TootContent) + content->content_len + sizeof(char);
+			to_write = (TootWrite*) MemPtrNew(size);
+			to_write->type = action;
+			// TODO this is definitely wrong
+			MemCpy(to_write->content->toot, content, size - sizeof(UInt8));
+			break;
+		default:
+			return;
+	}
+	
+	UInt16 record_number = 0;
+	MemHandle newRecordH = DmNewRecord(writes, &record_number, size);
+	if (newRecordH == NULL) {
+		return DmGetLastErr();
+	}
+	
+	TootWrite* writeRecord = MemHandleLock(newRecordH);
+	ErrFatalDisplayIf (authorRecord == NULL, "Unable to lock mem handle");
+
+	DmWrite(
+		writeRecord,
+		0, 
+		to_write,
+		size
+	);
+
+	ErrFatalDisplayIf(MemHandleUnlock(newRecordH), "error while freeing memory");
+	DmReleaseRecord(to_write, record_number, true);
+	ErrFatalDisplayIf(MemPtrFree(to_write)!=0, "error while freeing memory");
+}
+
 static Boolean MainMenuHandleEvent(UInt16 menuID) {
 	Boolean 	handled = false;
 	FormType 	*form;
