@@ -127,22 +127,27 @@ static void changeToot(FormType* form, FieldType* content, Boolean next, Boolean
 			MemHandle content_handle = FldGetTextHandle(content);
 			FldSetTextHandle(content, NULL);
 
+			int len = MainContentSize;
+			if (((int)sharedVarsP->current_toot_content_ptr->content_len) < MainContentSize) {
+				len = (int)sharedVarsP->current_toot_content_ptr->content_len;
+			}
+
 			if(!content_handle) {
-				content_handle = MemHandleNew(sharedVarsP->current_toot_content_ptr->content_len);
+				content_handle = MemHandleNew(len);
 			} else {
 				ErrFatalDisplayIf(
-					MemHandleResize(content_handle, sharedVarsP->current_toot_content_ptr->content_len) != 0,
+					MemHandleResize(content_handle, len) != 0,
 					"failed to resize content handle"
 				);
 			}
 						
 			char* content_str = (char*) MemHandleLock(content_handle);
-			MemSet(content_str, sharedVarsP->current_toot_content_ptr->content_len, 0);
+			MemSet(content_str, len, 0);
 			ErrFatalDisplayIf(!content_str, "failed to lock handle");
 			StrNCopy(
 				content_str, 
 				(const char*)&(sharedVarsP->current_toot_content_ptr->toot_content), 
-				sharedVarsP->current_toot_content_ptr->content_len -1
+				len -1
 			);
 			MemPtrUnlock(content_str);
 			FldSetTextHandle(content, content_handle);
@@ -151,54 +156,104 @@ static void changeToot(FormType* form, FieldType* content, Boolean next, Boolean
 	}
 }
 
-static void Favorite(HeffalumpState* sharedVarsP, action TootWriteType, TootContent* content) {
+static void loadTootPreview(FormType* form, HeffalumpState* sharedVarsP) {
+	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
+	FieldType* content = FrmGetObjectPtr(form, FrmGetObjectIndex(form, ExpandTootContentField));
+
+	SetLabelInForm(form, ExpandTootAuthorLabel, sharedVarsP->current_toot_author_ptr->author_name);
+
+	int start_char_offset = ((int)sharedVarsP->current_toot_page_index) * MainContentSize;
+	if (start_char_offset > (int)sharedVarsP->current_toot_content_ptr->content_len) {
+		sharedVarsP->current_toot_page_index -= 1;
+		return;
+	}
+
+	int remaining = (int)sharedVarsP->current_toot_content_ptr->content_len - start_char_offset;
+	int to_load_size = MainContentSize;
+	if (remaining < MainContentSize) {
+		len = remaining;
+	}
+
+	MemHandle content_handle = FldGetTextHandle(content);
+	FldSetTextHandle(content, NULL);
+	if(!content_handle) {
+		content_handle = MemHandleNew(len);
+	} else {
+		ErrFatalDisplayIf(
+			MemHandleResize(content_handle, to_load_size + 1) != 0,
+			"failed to resize content handle"
+		);
+	}
+				
+	char* content_str = (char*) MemHandleLock(content_handle);
+	MemSet(content_str, to_load_size + 1, 0);
+	ErrFatalDisplayIf(!content_str, "failed to lock handle");
+	StrNCopy(
+		content_str, 
+		(const char*)((&(sharedVarsP->current_toot_content_ptr->toot_content))+start_char_offset), 
+		to_load_size
+	);
+	MemPtrUnlock(content_str);
+	FldSetTextHandle(content, content_handle);
+	FldDrawField(content);
+}
+
+static void MoonWriteAction(HeffalumpState* sharedVarsP, TootWriteType action , TootContent* content) {
 	DmOpenRef writes = globalsSlotVal(GLOBALS_SLOT_WRITES_DB);
 	if (!writes) return;
+	if (!sharedVarsP) return;
 	UInt16 size;
 	TootWrite* to_write = NULL;
 
-	to_write->type = action;
-
 	switch (action) {
 		case 0: // favorite
-			size = sizeof(UInt8)+sizeof(UInt16);
+			FrmCustomAlert(DebugAlert1, "Favoriting Toot", NULL, NULL);
+			size = sizeof(TootWrite);
 			to_write = (TootWrite*) MemPtrNew(size);
-			to_write->type = action;
-			to_write->content->favorite = sharedVarsP->current_toot_content_record;
+			ErrFatalDisplayIf(!to_write, "failed to allocate handle");
+			FrmCustomAlert(DebugAlert1, "writing to type", NULL, NULL);
+			to_write->type = (UInt16) action;
+			FrmCustomAlert(DebugAlert1, "writing to content (favorite)", NULL, NULL);
+			to_write->content.favorite = sharedVarsP->current_toot_content_record;
 			break;
 		case 1: // reblog
-			size = sizeof(UInt8)+sizeof(UInt16);
+			size = sizeof(UInt16)+sizeof(UInt16);
 			to_write = (TootWrite*) MemPtrNew(size);
+			ErrFatalDisplayIf(!to_write, "failed to allocate handle");
 			to_write->type = action;
-			to_write->content->reblog = sharedVarsP->current_toot_content_record;
+			to_write->content.reblog = sharedVarsP->current_toot_content_record;
 			break;
 		case 2: // follow
-			size = sizeof(UInt8)+sizeof(UInt16);
+			size = sizeof(UInt16)+sizeof(UInt16);
 			to_write = (TootWrite*) MemPtrNew(size);
+			ErrFatalDisplayIf(!to_write, "failed to allocate handle");
 			to_write->type = action;
-			to_write->content->follow = sharedVarsP->current_toot_author_record;
+			to_write->content.follow = sharedVarsP->current_toot_author_record;
 			break;
 		case 3: // toot
 			if (!content) return;
-			size = sizeof(UInt8)+sizeof(TootContent) + content->content_len + sizeof(char);
+			size = sizeof(UInt16)+sizeof(TootContent) + content->content_len + sizeof(char);
 			to_write = (TootWrite*) MemPtrNew(size);
+			ErrFatalDisplayIf(!to_write, "failed to allocate handle");
 			to_write->type = action;
-			// TODO this is definitely wrong
-			MemCpy(to_write->content->toot, content, size - sizeof(UInt8));
+			MemMove(&(to_write->content.toot), (const void *) content, size - sizeof(UInt16));
 			break;
 		default:
 			return;
 	}
 	
+	FrmCustomAlert(DebugAlert1, "allocating record", NULL, NULL);
 	UInt16 record_number = 0;
 	MemHandle newRecordH = DmNewRecord(writes, &record_number, size);
 	if (newRecordH == NULL) {
-		return DmGetLastErr();
+		return;
 	}
 	
+	FrmCustomAlert(DebugAlert1, "locking record", NULL, NULL);
 	TootWrite* writeRecord = MemHandleLock(newRecordH);
-	ErrFatalDisplayIf (authorRecord == NULL, "Unable to lock mem handle");
+	ErrFatalDisplayIf (writeRecord == NULL, "Unable to lock mem handle");
 
+	FrmCustomAlert(DebugAlert1, "writing to record", NULL, NULL);
 	DmWrite(
 		writeRecord,
 		0, 
@@ -207,8 +262,10 @@ static void Favorite(HeffalumpState* sharedVarsP, action TootWriteType, TootCont
 	);
 
 	ErrFatalDisplayIf(MemHandleUnlock(newRecordH), "error while freeing memory");
-	DmReleaseRecord(to_write, record_number, true);
+	FrmCustomAlert(DebugAlert1, "releasing record", NULL, NULL);
+	DmReleaseRecord(writes, record_number, true);
 	ErrFatalDisplayIf(MemPtrFree(to_write)!=0, "error while freeing memory");
+	FrmCustomAlert(DebugAlert1, "done writing", NULL, NULL);
 }
 
 static Boolean MainMenuHandleEvent(UInt16 menuID) {
@@ -236,7 +293,7 @@ static Boolean MainMenuHandleEvent(UInt16 menuID) {
 		// 	break;
 		// #endif
 		
-		case OptionsAboutHelloWorld2:
+		case OptionsAboutHeffalump:
 			MenuEraseStatus(0);
 			form = FrmInitForm(AboutForm);
 			FrmDoDialog(form);
@@ -290,34 +347,151 @@ static Boolean MainFormHandleEvent(EventType* event) {
 			}
 			handled = true;
 			break;
-		case ctlSelectEvent:
-			switch (event->data.ctlSelect.controlID) {
-				case MainLikeButton:
-					handled = true;
-					break;
-				case MainReplyButton:
-					handled = true;
-					break;
-				case MainRepostButton:
-					handled = true;
-					break;
-				case MainPrevButton:
-					form = FrmGetActiveForm();
-					changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), false, false);
-					handled = true;
-					break;
-				case MainNextButton:
-					form = FrmGetActiveForm();
-					changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), true, false);
-					handled = true;
-					break;
+		case ctlSelectEvent: // user pressed a soft button
+			{
+				TootWriteType action;
+				switch (event->data.ctlSelect.controlID) {
+					case MainLikeButton:
+						action = Favorite;
+						FrmCustomAlert(DebugAlert1, "Sending Favorite to Action", NULL, NULL);
+						MoonWriteAction(
+							globalsSlotVal(GLOBALS_SLOT_SHARED_VARS),
+							action,
+							NULL
+						);
+						handled = true;
+						break;
+					case MainReplyButton:
+						handled = true;
+						break;
+					case MainRepostButton:
+						action = Reblog;
+						MoonWriteAction(
+							globalsSlotVal(GLOBALS_SLOT_SHARED_VARS),
+							action,
+							NULL
+						);
+						handled = true;
+						break;
+					case MainPrevButton:
+						form = FrmGetActiveForm();
+						changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), false, false);
+						handled = true;
+						break;
+					case MainNextButton:
+						form = FrmGetActiveForm();
+						changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), true, false);
+						handled = true;
+						break;
 
-				default:
-					break;
+					default:
+						break;
+				}
+				break;
 			}
-			break;
 		case menuEvent:
 			handled = MainMenuHandleEvent(event->data.menu.itemID);
+			break;
+
+		case frmCloseEvent:
+			//no matter why we're closing, free things we allocated
+			FreeUsedVariables();
+			break;
+		
+		default:
+			break;
+	}
+
+	return handled;
+}
+
+static Boolean ExpandTootFormHandleEvent(EventType* event) {
+	Boolean 	handled = false;
+	FormType 	*form;
+
+	switch (event->eType) {
+		case frmOpenEvent:
+			form = FrmGetActiveForm();
+			loadTootPreview(Preview)
+			FrmDrawForm(form);
+			handled = true;
+			break;
+		case frmCloseEvent:
+			form = FrmGetActiveForm();
+			FieldType* content_field = FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField));
+			MemHandle content_handle = FldGetTextHandle(content_field);
+			FldSetTextHandle(content_field, NULL);
+			ErrNonFatalDisplayIf(!MemHandleFree(content_handle), "failed to free handle")
+			
+			handled = true;
+			break;
+		case keyDownEvent:
+			form = FrmGetActiveForm();
+			switch (event->data.keyDown.chr) {
+				case vchrPageDown:
+					if (form != NULL) {
+						changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), true, false);
+					}
+					break;
+				case vchrPageUp:
+					if (form != NULL) {
+						changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), false, false);
+					}					
+					break;
+				default: 
+					break;
+			}
+			handled = true;
+			break;
+		case ctlSelectEvent: // user pressed a soft button
+			{
+				TootWriteType action;
+				switch (event->data.ctlSelect.controlID) {
+					case MainLikeButton:
+						action = Favorite;
+						FrmCustomAlert(DebugAlert1, "Sending Favorite to Action", NULL, NULL);
+						MoonWriteAction(
+							globalsSlotVal(GLOBALS_SLOT_SHARED_VARS),
+							action,
+							NULL
+						);
+						handled = true;
+						break;
+					case MainReplyButton:
+						handled = true;
+						break;
+					case MainRepostButton:
+						action = Reblog;
+						MoonWriteAction(
+							globalsSlotVal(GLOBALS_SLOT_SHARED_VARS),
+							action,
+							NULL
+						);
+						handled = true;
+						break;
+					case MainPrevButton:
+						form = FrmGetActiveForm();
+						changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), false, false);
+						handled = true;
+						break;
+					case MainNextButton:
+						form = FrmGetActiveForm();
+						changeToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)), true, false);
+						handled = true;
+						break;
+
+					default:
+						break;
+				}
+				break;
+			}
+		case menuEvent:
+			handled = MainMenuHandleEvent(event->data.menu.itemID);
+			break;
+
+		case frmCloseEvent:
+			//no matter why we're closing, free things we allocated
+			FreeUsedVariables();
 			break;
 		
 		default:
@@ -340,6 +514,10 @@ static Boolean AppHandleEvent(EventType* event) {
 		switch(formID) {
 			case MainForm:
 				FrmSetEventHandler(form, MainFormHandleEvent);
+				break;
+
+			case ExpandTootForm: 
+				FrmSetEventHandler(form, ExpandTootFormHandleEvent);
 				break;
 
 			default:
@@ -470,11 +648,12 @@ static Err AppStart(void) {
 		if (e) {return e;}
 
 		writes = DmOpenDatabaseByTypeCreator(tootWritesDBType, heffCreatorID, dmModeReadWrite);
-		ErrFatalDisplayIf(writes == NULL, "Failed to open content DB");
+		ErrFatalDisplayIf(writes == NULL, "Failed to open writes DB");
 	}
 	*globalsSlotPtr(GLOBALS_SLOT_WRITES_DB) = writes;
 
-	
+	ErrNonFatalDisplayIf( DmNumRecords(author) == 0 && DmNumRecords(content) == 0, "No toots loaded, please hotsync again" );
+
 
 	#ifdef HEFFALUMP_NO_DB_DEV
 	if (DmNumRecords(author) == 0 && DmNumRecords(content) == 0) { // add info for test toots

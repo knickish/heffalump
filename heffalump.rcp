@@ -42,11 +42,11 @@ BEGIN
         MULTIPLELINES
         MAXCHARS MainContentSize
 
-//    BUTTON "Like" ID MainLikeButton
-//        AT (1 147 AUTO AUTO)
+    BUTTON "Like" ID MainLikeButton
+        AT (1 147 AUTO AUTO)
+    BUTTON "Repost" ID MainRepostButton
+        AT (PrevRight+5 PrevTop AUTO AUTO)
 //    BUTTON "Reply" ID MainReplyButton
-//        AT (PrevRight+5 PrevTop AUTO AUTO)
-//    BUTTON "Repost" ID MainRepostButton
 //        AT (PrevRight+5 PrevTop AUTO AUTO)
     BUTTON "\001" ID MainPrevButton
         AT (142 143 AUTO AUTO)
@@ -75,18 +75,38 @@ BEGIN
     END
     PULLDOWN "Options"
     BEGIN
-        MENUITEM "About Hello World 2" OptionsAboutHelloWorld2
+        MENUITEM "About Heffalump" OptionsAboutHeffalump
     END
 END
 
 FORM ID AboutForm AT (2 2 156 156)
 USABLE MODAL SAVEBEHIND
 BEGIN
-    TITLE "About Hello World 2"
+    TITLE "About Heffalump"
     FORMBITMAP AT (7 19) BITMAP BmpFamilyAppIcon
-    LABEL "ABOUT HELLO WORLD 2" AUTOID AT (37 18) FONT 2
-    LABEL "Compiled with with gcc 9.1 and PilRC 3.2" AUTOID AT (37 32)
+    LABEL "ABOUT Heffalump" AUTOID AT (37 21) FONT 2
+    LABEL "Compiled with gcc 9.1 and PilRC 3.2" AUTOID AT (7 PrevBottom + 10)
     BUTTON "OK" AboutOKButton AT (58 134 40 12)
+END
+
+FORM ID PreviewTootForm AT (2 2 156 156)
+USABLE MODAL SAVEBEHIND
+BEGIN
+    TITLE "View Full Toot"
+    LABEL "                                        " ID PreviewTootAuthorLabel AT (3 17) FONT 1
+    FIELD ID PreviewTootContentField AT (PrevLeft PrevBottom 151 110) 
+        NONEDITABLE
+        MULTIPLELINES
+        MAXCHARS MainContentSize
+
+    BUTTON "\001" ID PreviewTootPrevButton
+        AT (142 143 AUTO AUTO)
+        NOFRAME
+        FONT 5
+    BUTTON "\002" ID PreviewTootNextButton
+        AT (142 PrevBottom-1 AUTO AUTO)
+        NOFRAME
+        FONT 5
 END
 
 ALERT ID DebugAlert1
