@@ -46,8 +46,11 @@ BEGIN
         AT (1 147 AUTO AUTO)
     BUTTON "Repost" ID MainRepostButton
         AT (PrevRight+5 PrevTop AUTO AUTO)
-//    BUTTON "Reply" ID MainReplyButton
-//        AT (PrevRight+5 PrevTop AUTO AUTO)
+    BUTTON "Reply" ID MainReplyButton
+        AT (PrevRight+5 PrevTop AUTO AUTO)
+    BUTTON "..." ID MainExpandButton
+        AT (PrevRight+5 PrevTop AUTO AUTO)
+        NOFRAME
     BUTTON "\001" ID MainPrevButton
         AT (142 143 AUTO AUTO)
         NOFRAME
@@ -60,6 +63,10 @@ END
 
 MENU ID MainMenuBar
 BEGIN
+    PULLDOWN "Mastodon"
+    BEGIN
+        MENUITEM "Compose Toot"    OptionsComposeToot
+    END
     PULLDOWN "Edit"
     BEGIN
 //        MENUITEM "Undo"             EditUndo            "U"
@@ -89,24 +96,43 @@ BEGIN
     BUTTON "OK" AboutOKButton AT (58 134 40 12)
 END
 
-FORM ID PreviewTootForm AT (2 2 156 156)
-USABLE MODAL SAVEBEHIND
+FORM ID ExpandTootForm AT (2 2 156 156)
+USABLE MODAL NOSAVEBEHIND
 BEGIN
     TITLE "View Full Toot"
-    LABEL "                                        " ID PreviewTootAuthorLabel AT (3 17) FONT 1
-    FIELD ID PreviewTootContentField AT (PrevLeft PrevBottom 151 110) 
+    LABEL "                                        " ID ExpandTootAuthorLabel AT (3 14) FONT 1
+    FIELD ID ExpandTootContentField AT (PrevLeft PrevBottom 151 110) 
         NONEDITABLE
         MULTIPLELINES
         MAXCHARS MainContentSize
 
-    BUTTON "\001" ID PreviewTootPrevButton
-        AT (142 143 AUTO AUTO)
+    BUTTON "Back" ID ExpandTootBackButton
+        AT (3 140 132 AUTO)
+
+    BUTTON "\001" ID ExpandTootPrevButton
+        AT (136 138 AUTO AUTO)
         NOFRAME
         FONT 5
-    BUTTON "\002" ID PreviewTootNextButton
-        AT (142 PrevBottom-1 AUTO AUTO)
+    BUTTON "\002" ID ExpandTootNextButton
+        AT (136 PrevBottom-1 AUTO AUTO)
         NOFRAME
         FONT 5
+END
+
+FORM ID ComposeTootForm AT (2 2 156 156)
+USABLE MODAL NOSAVEBEHIND
+BEGIN
+    TITLE "Compose Toot"
+    LABEL "                                        " ID ComposeTootAuthorLabel AT (3 14) FONT 1
+    FIELD ID ComposeTootContentField AT (PrevLeft PrevBottom 151 110) 
+        EDITABLE
+        UNDERLINED
+        MULTIPLELINES
+        MAXCHARS MainContentSize
+    BUTTON "Cancel" ID ComposeTootCancelButton
+        AT (3 140 AUTO AUTO)
+    BUTTON "Send" ID ComposeTootSendButton
+        AT (PrevRight+5 PrevTop AUTO AUTO)
 END
 
 ALERT ID DebugAlert1

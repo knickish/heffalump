@@ -23,7 +23,12 @@ typedef struct HeffalumpState_s {
     MemHandle       current_toot_content_handle;
     TootAuthor*     current_toot_author_ptr;
     TootContent*    current_toot_content_ptr;
+
+    // pagination
     UInt8           current_toot_page_index;
+
+    UInt16          toot_content_record_count;
+    Boolean         toot_is_reply_to_current;
 } HeffalumpState;
 
 typedef enum  {
@@ -46,4 +51,8 @@ typedef struct {
     UInt16 type;
     TootWriteContent content;
 } TootWrite;
+
+typedef struct {
+    int start, end;
+} CharOffsets;
 #endif
