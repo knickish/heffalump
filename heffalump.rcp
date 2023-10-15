@@ -126,6 +126,7 @@ BEGIN
     LABEL "                                        " ID ComposeTootAuthorLabel AT (3 14) FONT 1
     FIELD ID ComposeTootContentField AT (PrevLeft PrevBottom 151 110) 
         EDITABLE
+        AUTOSHIFT
         UNDERLINED
         MULTIPLELINES
         MAXCHARS MainContentSize
@@ -133,6 +134,7 @@ BEGIN
         AT (3 140 AUTO AUTO)
     BUTTON "Send" ID ComposeTootSendButton
         AT (PrevRight+5 PrevTop AUTO AUTO)
+    GRAFFITISTATEINDICATOR AT (142 145)
 END
 
 ALERT ID DebugAlert1

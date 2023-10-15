@@ -6,12 +6,12 @@
 #include <PalmOSGlue.h>
 #include <stddef.h>
 
-
+// #define HEFFALUMP_TESTING
 // #define HEFFALUMP_NO_DB_DEV
 #ifdef HEFFALUMP_NO_DB_DEV
 #include "heffalumpTestRsc.h"
 #endif
-#define HEFFALUMP_TESTING
+
 
 static Boolean HandleEditOptions(UInt16 menuID, FieldType* field) {
 	Boolean handled = false;
@@ -127,43 +127,12 @@ static CharOffsets GetCharOffsetsOfPage(UInt8 page_number, int rows, int availab
 					if (used_width + next_char_width >= available_width) {
 						if (current_word_width + next_char_width >= available_width) {
 							// we're not making progress, time to split the word
-							{ //debug
-								// char* debug = MemPtrNew(250);
-								// MemSet(debug, 250, 0);
-								// StrPrintF(debug, "wide load. row: %d, start: %d, len: %d, str: ", row, begin_line_offset, char_offset-begin_line_offset);
-								// StrNCopy(
-								// 	&(debug[StrLen(debug)]), 
-								// 	(const char *)&(sharedVarsP->current_toot_content_ptr->toot_content[begin_line_offset]), 
-								// 	char_offset-begin_line_offset
-								// );
-								// FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
-								// MemPtrFree(debug);
-							}
 						} else {
 							// we're in the middle of a word, go back and split the line at the start of the word
-							{ //debug
-								// char* debug = MemPtrNew(250);
-								// MemSet(debug, 250, 0);
-								// StrPrintF(debug, "splitting row. row: %d, w-len: %d, w-width: %d, str: ", row, current_word_size +1, current_word_width + next_char_width);
-								// StrNCopy(
-								// 	&(debug[StrLen(debug)]), 
-								// 	(const char *)&(sharedVarsP->current_toot_content_ptr->toot_content[begin_line_offset]), 
-								// 	(char_offset+1)-begin_line_offset
-								// );
-								// FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
-								// MemPtrFree(debug);
-							}
 							char_offset -= current_word_size;
 						}						
 						
-						// { //debug
-						// 	char* debug = MemPtrNew(150);
-						// 	MemSet(debug, 150, 0);
-						// 	StrPrintF(debug, "max width reached. row: %d, char: %d, str: ", row, char_offset);
-						// 	StrNCopy((Char*)&(debug[StrLen(debug)]), (const char *)&(sharedVarsP->current_toot_content_ptr->toot_content[begin_line_offset]), char_offset-begin_line_offset);
-						// 	FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
-						// 	MemPtrFree(debug);
-						// }
+
 						break;
 					}
 					used_width += next_char_width;
@@ -369,7 +338,7 @@ static void MoonWriteAction(HeffalumpState* sharedVarsP, TootWriteType action , 
 	switch (action) {
 		case 0: // favorite
 			// FrmCustomAlert(DebugAlert1, "Favoriting Toot", NULL, NULL);
-			size = sizeof(TootWrite);
+			size =  sizeof(UInt16)+sizeof(UInt16);
 			to_write = (TootWrite*) MemPtrNew(size);
 			ErrFatalDisplayIf(!to_write, "failed to allocate handle");
 			// FrmCustomAlert(DebugAlert1, "writing to type", NULL, NULL);
@@ -388,15 +357,21 @@ static void MoonWriteAction(HeffalumpState* sharedVarsP, TootWriteType action , 
 			size = sizeof(UInt16)+sizeof(UInt16);
 			to_write = (TootWrite*) MemPtrNew(size);
 			ErrFatalDisplayIf(!to_write, "failed to allocate handle");
-			to_write->type = action;
+			to_write->type = (UInt16) action;
 			to_write->content.follow = sharedVarsP->current_toot_author_record;
 			break;
 		case 3: // toot
-			if (!content) return;
-			size = sizeof(UInt16)+sizeof(TootContent) + content->content_len + sizeof(char);
+			if (!content) {
+				#ifdef HEFFALUMP_TESTING
+				ErrNonFatalDisplay("content is nullptr");
+				#endif
+				return;
+			}
+			size = sizeof(UInt16)+ sizeof(TootContent) + content->content_len + sizeof(char);
 			to_write = (TootWrite*) MemPtrNew(size);
+			MemSet(to_write, size, 0);
 			ErrFatalDisplayIf(!to_write, "failed to allocate handle");
-			to_write->type = action;
+			to_write->type = (UInt16) action;
 			MemMove(&(to_write->content.toot), (const void *) content, size - sizeof(UInt16));
 			break;
 		default:
@@ -417,7 +392,7 @@ static void MoonWriteAction(HeffalumpState* sharedVarsP, TootWriteType action , 
 	// FrmCustomAlert(DebugAlert1, "writing to record", NULL, NULL);
 	DmWrite(
 		writeRecord,
-		0, 
+		0,
 		to_write,
 		size
 	);
@@ -698,6 +673,9 @@ static Boolean ComposeTootFormHandleEvent(EventType* event) {
 						FldSetTextHandle(content, NULL);
 						char* content_str = (char*) MemHandleLock(content_handle);
 						TootContent* to_write = TootContentConstructor(StrLen(content_str));
+						#ifdef HEFFALUMP_TESTING
+						ErrNonFatalDisplayIf(StrLen(content_str) == 0, "Composed toot has zero len");
+						#endif
 						StrNCopy(to_write->toot_content, (const char*) content_str, StrLen(content_str));
 						MoonWriteAction(sharedVarsP, action, to_write);
 						MemPtrUnlock(content_str);
@@ -885,6 +863,15 @@ static Err AppStart(void) {
 	ErrNonFatalDisplayIf( DmNumRecords(author) == 0 && DmNumRecords(content) == 0, "No toots loaded, please hotsync again" );
 
 	state->toot_content_record_count = DmNumRecords(content);
+
+	#ifdef HEFFALUMP_TESTING
+	LocalID writeDbId = DmFindDatabase(0, tootWritesDBName);
+	UInt16 attributes = 0;
+	ErrNonFatalDisplayIf(writeDbId == 0, "Failed to find localID for write db");
+	ErrNonFatalDisplayIf(errNone != DmDatabaseInfo(0, writeDbId, NULL, &attributes, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "Failed to rerive db info");
+	attributes |= dmHdrAttrBackup;
+	ErrNonFatalDisplayIf(errNone != DmSetDatabaseInfo(0, writeDbId, NULL, &attributes, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "failed to set db info");
+	#endif
 
 	#ifdef HEFFALUMP_NO_DB_DEV
 	if (DmNumRecords(author) == 0 && DmNumRecords(content) == 0) { // add info for test toots
