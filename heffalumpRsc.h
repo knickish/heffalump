@@ -9,8 +9,8 @@
 #define MainRepostButton        1004
 #define MainPrevButton          1005
 #define MainNextButton          1006
-#define MainContentSize         250
-
+#define MainExpandButton        1007
+#define MainContentSize         265
 
 #define MainMenuBar             1000
 #define EditUndo                1000
@@ -20,10 +20,30 @@
 #define EditSelectAll           1004
 #define EditKeyboard            1005
 #define EditGrafittiHelp        1006
-#define OptionsAboutHelloWorld2 1007
+#define OptionsAboutHeffalump   1007
+#define OptionsComposeToot      1008
 
 #define AboutForm               1001
 #define AboutOKButton           1000
+
+#define ExpandTootForm                1002
+#define ExpandTootAuthorLabel         1000
+#define ExpandTootContentField        1001
+#define ExpandTootPrevButton          1002
+#define ExpandTootNextButton          1003
+#define ExpandTootBackButton          1004
+
+#define RepliesTootForm                1002
+#define RepliesTootAuthorLabel         1000
+#define RepliesTootContentField        1001
+#define RepliesTootPrevButton          1002
+#define RepliesTootNextButton          1003
+
+#define ComposeTootForm                1003
+#define ComposeTootAuthorLabel         1000
+#define ComposeTootContentField        1001
+#define ComposeTootSendButton          1002
+#define ComposeTootCancelButton        1003
 
 #define DebugAlert1             1002
 #define DebugAlert2             1003
@@ -38,5 +58,8 @@
 
 #define tootAuthorDBType 'Auth'
 #define tootAuthorDBName "HeffalumpAuthorDB"
+
+#define tootWritesDBType 'Writ'
+#define tootWritesDBName "HeffalumpWritesDB"
 
 #endif

@@ -23,6 +23,36 @@ typedef struct HeffalumpState_s {
     MemHandle       current_toot_content_handle;
     TootAuthor*     current_toot_author_ptr;
     TootContent*    current_toot_content_ptr;
+
+    // pagination
+    UInt8           current_toot_page_index;
+
+    UInt16          toot_content_record_count;
+    Boolean         toot_is_reply_to_current;
 } HeffalumpState;
 
+typedef enum  {
+    Favorite = 0,
+    Follow = 1,
+    Reblog = 2,
+    Toot = 3,
+    // to ensure the values chosen are < of size u8::MAX
+    DoNotUse = 0xFF
+} TootWriteType;
+
+typedef union {
+    UInt16 favorite;
+    UInt16 reblog;
+    UInt16 follow;
+    TootContent toot;
+} TootWriteContent;
+
+typedef struct {
+    UInt16 type;
+    TootWriteContent content;
+} TootWrite;
+
+typedef struct {
+    int start, end;
+} CharOffsets;
 #endif
