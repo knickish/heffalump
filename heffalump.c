@@ -81,10 +81,15 @@ UInt16 SaturatingDecrement(UInt16 base) {
 	return base == 0 ? base : base - 1;
 }
 
-static TootContent* TootContentConstructor(UInt16 length) {
+static TootContent* TootContentConstructor(UInt16 length, UInt16* is_reply_to) {
 	int size = sizeof(TootContent) + length + sizeof(char);
 	TootContent* ret = (TootContent*) MemPtrNew(size);
 	MemSet(ret, size, 0);
+	if (is_reply_to != NULL) {
+		// adding +1 here to emulate an option type. 
+		// this is subtracted again in the conduit
+		ret->is_reply_to = *is_reply_to + 1;
+	}
 	ret->content_len = length;
 	return ret;
 }
@@ -672,7 +677,8 @@ static Boolean ComposeTootFormHandleEvent(EventType* event) {
 						MemHandle content_handle = FldGetTextHandle(content);
 						FldSetTextHandle(content, NULL);
 						char* content_str = (char*) MemHandleLock(content_handle);
-						TootContent* to_write = TootContentConstructor(StrLen(content_str));
+						UInt16* is_reply_to = sharedVarsP->toot_is_reply_to_current ? &(sharedVarsP->current_toot_author_record) : NULL;
+						TootContent* to_write = TootContentConstructor(StrLen(content_str), is_reply_to);
 						#ifdef HEFFALUMP_TESTING
 						ErrNonFatalDisplayIf(StrLen(content_str) == 0, "Composed toot has zero len");
 						#endif
