@@ -81,6 +81,39 @@ UInt16 SaturatingDecrement(UInt16 base) {
 	return base == 0 ? base : base - 1;
 }
 
+static HeffalumpPrefs* LoadPrefs(void)
+{
+	Boolean foundPrefs;
+	struct HeffalumpPrefs *prefs;
+	UInt16 latestPrefSize;
+
+	latestPrefSize = sizeof(HeffalumpPrefs) + 100;
+
+	prefs = MemPtrNew(latestPrefSize);
+	if (!prefs)
+	{
+		SysFatalAlert("Failed to allocate memory to store preferences!");
+	}
+	MemSet(prefs, latestPrefSize, 0);
+
+	foundPrefs = PrefGetAppPreferences(heffCreatorID, 1, prefs, &latestPrefSize, true);
+	if (!foundPrefs)
+	{
+		FrmCustomAlert(DebugAlert1, "no preferences found, creating one instead", NULL, NULL);
+		PrefSetAppPreferences(heffCreatorID, 1, NULL, 0);
+		MemPtrFree(prefs);
+		return NULL;
+	}
+
+	char* debug = MemPtrNew(150);
+	MemSet(debug, 150, 0);
+	StrPrintF(debug, "pref contents: %s", &prefs->test);
+	FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
+	MemPtrFree(debug);
+
+	return prefs;
+}
+
 static TootContent* TootContentConstructor(UInt16 length, UInt16* is_reply_to) {
 	int size = sizeof(TootContent) + length + sizeof(char);
 	TootContent* ret = (TootContent*) MemPtrNew(size);
@@ -830,6 +863,9 @@ static Err AppStart(void) {
 	MakeSharedVariables();
 	HeffalumpState* state = (HeffalumpState*)(globalsSlotVal(GLOBALS_SLOT_SHARED_VARS));
 	ErrFatalDisplayIf(!state, "Shared variables could not be loaded");
+
+	HeffalumpPrefs* prefs = LoadPrefs();
+	(void) prefs;
 
 	DmOpenRef author;
 	DmOpenRef content;

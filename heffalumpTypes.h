@@ -16,6 +16,17 @@ typedef struct TootAuthor_s {
     char  author_name[];
 } TootAuthor;
 
+typedef struct HeffalumpPrefs_s {
+    UInt16          self_content_start;
+    char            test[];
+    // UInt16          timeline_content_start;
+    
+    // UInt16          reply_content_start;
+    // UInt16          reply_content_end;
+} HeffalumpPrefs;
+
+
+
 typedef struct HeffalumpState_s {
     UInt16          current_toot_author_record;
     UInt16          current_toot_content_record;
