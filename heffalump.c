@@ -1,12 +1,13 @@
 // #define ERROR_CHECK_FULL
+#include "heffalumpHelpers.h"
 #include "heffalumpRsc.h"
-#include "heffalumpTypes.h"
 #include "heffalumpStatics.h"
+#include "heffalumpTypes.h"
 #include <PalmOS.h>
 #include <PalmOSGlue.h>
 #include <stddef.h>
 
-// #define HEFFALUMP_TESTING
+#define HEFFALUMP_TESTING
 // #define HEFFALUMP_NO_DB_DEV
 #ifdef HEFFALUMP_NO_DB_DEV
 #include "heffalumpTestRsc.h"
@@ -49,45 +50,14 @@ static Boolean HandleEditOptions(UInt16 menuID, FieldType* field) {
 	return handled;
 }
 
-static void SetLabelInForm(FormType *form, UInt16 labelID, const char *newText)
-{
-  UInt16 labelObjectIndex = FrmGetObjectIndex(form, labelID);
 
-  FrmHideObject(form, labelObjectIndex);
-  if (newText != NULL) {
-	FrmCopyLabel(form, labelID, newText);
-  	FrmShowObject(form, labelObjectIndex);
-  }
-}
-
-static void HideButtonInForm(FormType *form, UInt16 buttonID) {
-	UInt16 buttonObjectIndex = FrmGetObjectIndex(form, buttonID);
-	FrmHideObject(form, buttonObjectIndex);
-}
-
-static void ShowButtonInForm(FormType *form, UInt16 buttonID) {
-	UInt16 buttonObjectIndex = FrmGetObjectIndex(form, buttonID);
-	FrmShowObject(form, buttonObjectIndex);
-}
-
-static UInt16 CurrentTootRecordNumber() {
-	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
-	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
-
-	return sharedVarsP->current_toot_content_record;
-}
-
-UInt16 SaturatingDecrement(UInt16 base) {
-	return base == 0 ? base : base - 1;
-}
 
 static HeffalumpPrefs* LoadPrefs(void)
 {
-	Boolean foundPrefs;
-	struct HeffalumpPrefs *prefs;
+	HeffalumpPrefs *prefs;
 	UInt16 latestPrefSize;
 
-	latestPrefSize = sizeof(HeffalumpPrefs) + 100;
+	latestPrefSize = sizeof(HeffalumpPrefs) + 150;
 
 	prefs = MemPtrNew(latestPrefSize);
 	if (!prefs)
@@ -96,12 +66,12 @@ static HeffalumpPrefs* LoadPrefs(void)
 	}
 	MemSet(prefs, latestPrefSize, 0);
 
-	foundPrefs = PrefGetAppPreferences(heffCreatorID, 1, prefs, &latestPrefSize, true);
-	if (!foundPrefs)
+	if (PrefGetAppPreferences(heffCreatorID, 0, prefs, &latestPrefSize, true) == noPreferenceFound)
 	{
 		FrmCustomAlert(DebugAlert1, "no preferences found, creating one instead", NULL, NULL);
-		PrefSetAppPreferences(heffCreatorID, 1, NULL, 0);
+		PrefSetAppPreferences(heffCreatorID, 0, 0, prefs, sizeof(HeffalumpPrefs), true);
 		MemPtrFree(prefs);
+		FrmCustomAlert(DebugAlert1, "returning", NULL, NULL);
 		return NULL;
 	}
 
@@ -125,10 +95,6 @@ static TootContent* TootContentConstructor(UInt16 length, UInt16* is_reply_to) {
 	}
 	ret->content_len = length;
 	return ret;
-}
-
-static Boolean IsSpace(char c) {
-	return c == '\t' || c == ' ';
 }
 
 static CharOffsets GetCharOffsetsOfPage(UInt8 page_number, int rows, int available_width) {
@@ -366,7 +332,7 @@ static void LoadExpandedToot(FormType* form) {
 	FldDrawField(content);
 }
 
-static void MoonWriteAction(HeffalumpState* sharedVarsP, TootWriteType action , TootContent* content) {
+static void WriteAction(HeffalumpState* sharedVarsP, TootWriteType action , TootContent* content) {
 	DmOpenRef writes = globalsSlotVal(GLOBALS_SLOT_WRITES_DB);
 	if (!writes) return;
 	if (!sharedVarsP) return;
@@ -546,7 +512,7 @@ static Boolean MainFormHandleEvent(EventType* event) {
 					case MainLikeButton:
 						action = Favorite;
 						// FrmCustomAlert(DebugAlert1, "Sending Favorite to Action", NULL, NULL);
-						MoonWriteAction(
+						WriteAction(
 							globalsSlotVal(GLOBALS_SLOT_SHARED_VARS),
 							action,
 							NULL
@@ -560,7 +526,7 @@ static Boolean MainFormHandleEvent(EventType* event) {
 						break;
 					case MainRepostButton:
 						action = Reblog;
-						MoonWriteAction(
+						WriteAction(
 							globalsSlotVal(GLOBALS_SLOT_SHARED_VARS),
 							action,
 							NULL
@@ -716,7 +682,7 @@ static Boolean ComposeTootFormHandleEvent(EventType* event) {
 						ErrNonFatalDisplayIf(StrLen(content_str) == 0, "Composed toot has zero len");
 						#endif
 						StrNCopy(to_write->toot_content, (const char*) content_str, StrLen(content_str));
-						MoonWriteAction(sharedVarsP, action, to_write);
+						WriteAction(sharedVarsP, action, to_write);
 						MemPtrUnlock(content_str);
 						FldSetTextHandle(content, content_handle);
 						FrmGotoForm(MainForm);
@@ -807,6 +773,12 @@ static void MakeSharedVariables(void)
 	ErrFatalDisplayIf(!sharedVars, "Failed to allocate memory for shared variables");
 	MemSet(sharedVars, sizeof(HeffalumpState), 0);
 
+	HeffalumpPrefs* prefs = LoadPrefs();
+	ErrNonFatalDisplayIf( prefs == NULL, "No preferences loaded, please hotsync again" );
+	FrmCustomAlert(DebugAlert1, "returned", NULL, NULL);
+
+	sharedVars->prefs = prefs;
+
 	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = sharedVars;
 	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = NULL;
 	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = NULL;
@@ -830,6 +802,9 @@ static void FreeSharedVariables(void)
 		sharedVarsP->current_toot_content_ptr = NULL;
 		ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_content_handle)!=0, "error while freeing toot content handle");
 		DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
+	}
+	if (sharedVarsP->prefs != NULL) {
+		ErrFatalDisplayIf(MemPtrFree(sharedVarsP->prefs)!=0, "error while freeing preferences");
 	}
 
 	ErrFatalDisplayIf(MemPtrFree(sharedVarsP)!=0, "error while freeing shared variables");
@@ -863,9 +838,6 @@ static Err AppStart(void) {
 	MakeSharedVariables();
 	HeffalumpState* state = (HeffalumpState*)(globalsSlotVal(GLOBALS_SLOT_SHARED_VARS));
 	ErrFatalDisplayIf(!state, "Shared variables could not be loaded");
-
-	HeffalumpPrefs* prefs = LoadPrefs();
-	(void) prefs;
 
 	DmOpenRef author;
 	DmOpenRef content;
@@ -902,7 +874,11 @@ static Err AppStart(void) {
 	}
 	*globalsSlotPtr(GLOBALS_SLOT_WRITES_DB) = writes;
 
-	ErrNonFatalDisplayIf( DmNumRecords(author) == 0 && DmNumRecords(content) == 0, "No toots loaded, please hotsync again" );
+	if (DmNumRecords(author) == 0 && DmNumRecords(content) == 0) {
+		ErrFatalDisplay("No toots loaded, please hotsync again" );
+		AppStop();
+		return -1;
+	}
 
 	state->toot_content_record_count = DmNumRecords(content);
 

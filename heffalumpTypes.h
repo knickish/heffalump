@@ -40,6 +40,8 @@ typedef struct HeffalumpState_s {
 
     UInt16          toot_content_record_count;
     Boolean         toot_is_reply_to_current;
+
+    HeffalumpPrefs* prefs;
 } HeffalumpState;
 
 typedef enum  {
