@@ -57,7 +57,7 @@ static HeffalumpPrefs* LoadPrefs(void)
 	HeffalumpPrefs *prefs;
 	UInt16 latestPrefSize;
 
-	latestPrefSize = sizeof(HeffalumpPrefs) + 150;
+	latestPrefSize = sizeof(HeffalumpPrefs);
 
 	prefs = MemPtrNew(latestPrefSize);
 	if (!prefs)
@@ -77,7 +77,7 @@ static HeffalumpPrefs* LoadPrefs(void)
 
 	char* debug = MemPtrNew(150);
 	MemSet(debug, 150, 0);
-	StrPrintF(debug, "pref contents: %s", &prefs->test);
+	StrPrintF(debug, "pref contents: %d", &prefs->home_timeline_len);
 	FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
 	MemPtrFree(debug);
 
@@ -206,10 +206,16 @@ static void ChangeToot(UInt16 requested) {
 		if (sharedVarsP->current_toot_content_ptr) {
 			ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_content_handle), "error while freeing memory");
 			DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
+			DmReleaseRecord(content, sharedVarsP->self_toot_content_record, false);
 		}
 
 		// load new content
-		sharedVarsP->current_toot_content_record = requested;
+		if (sharedVarsP->viewing_self_timeline){
+			sharedVarsP->self_toot_content_record = requested;
+		} else {
+			sharedVarsP->current_toot_content_record = requested;
+		}
+		
 		sharedVarsP->current_toot_content_ptr = content_inst;
 		sharedVarsP->current_toot_content_handle = content_handle;
 
@@ -282,7 +288,7 @@ static void LoadExpandedToot(FormType* form) {
 
 	SetLabelInForm(form, ExpandTootAuthorLabel, sharedVarsP->current_toot_author_ptr->author_name);
 
-	CharOffsets indices = GetCharOffsetsOfPage(sharedVarsP->current_toot_page_index, 10, 154);
+	CharOffsets indices = GetCharOffsetsOfPage(sharedVarsP->current_toot_page_index, 10, 152);
 	int end_char_index = indices.end;
 	int start_char_offset = indices.start;
 	if (
@@ -293,7 +299,7 @@ static void LoadExpandedToot(FormType* form) {
 			)
 		) {
 		sharedVarsP->current_toot_page_index -= 1;
-		indices = GetCharOffsetsOfPage(sharedVarsP->current_toot_page_index, 10, 156);
+		indices = GetCharOffsetsOfPage(sharedVarsP->current_toot_page_index, 10, 152);
 		end_char_index = indices.end;
 		start_char_offset = indices.start;
 	}
@@ -415,6 +421,8 @@ static Boolean MainMenuHandleEvent(UInt16 menuID) {
 
 	form = FrmGetActiveForm();
 	field = FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField));
+	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
+	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
 
 	switch (menuID) {
 		// case EditUndo:
@@ -445,6 +453,22 @@ static Boolean MainMenuHandleEvent(UInt16 menuID) {
 		case OptionsComposeToot:
 			MenuEraseStatus(0);
 			FrmGotoForm(ComposeTootForm);
+			handled = true;
+			break;
+
+		case OptionsViewTimeline:
+			MenuEraseStatus(0);
+
+			sharedVarsP->viewing_self_timeline = false;
+			ChangeToot(sharedVarsP->current_toot_content_record);
+			handled = true;
+			break;
+
+		case OptionsViewSelfToots:
+			MenuEraseStatus(0);
+
+			sharedVarsP->viewing_self_timeline = true;
+			ChangeToot(sharedVarsP->self_toot_content_record);
 			handled = true;
 			break;
 
@@ -555,7 +579,10 @@ static Boolean MainFormHandleEvent(EventType* event) {
 				break;
 			}
 		case menuEvent:
+			form = FrmGetActiveForm();
 			handled = MainMenuHandleEvent(event->data.menu.itemID);
+			ChangeToot(CurrentTootRecordNumber());
+			LoadTimelineToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)));
 			break;
 		
 		default:
@@ -778,6 +805,7 @@ static void MakeSharedVariables(void)
 	FrmCustomAlert(DebugAlert1, "returned", NULL, NULL);
 
 	sharedVars->prefs = prefs;
+	sharedVars->self_toot_content_record = prefs->home_timeline_len;
 
 	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = sharedVars;
 	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = NULL;

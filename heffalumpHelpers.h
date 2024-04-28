@@ -26,8 +26,11 @@ static void ShowButtonInForm(FormType *form, UInt16 buttonID) {
 static UInt16 CurrentTootRecordNumber() {
 	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
 	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
-
-	return sharedVarsP->current_toot_content_record;
+	if (sharedVarsP->viewing_self_timeline) {
+		return sharedVarsP->self_toot_content_record;
+	} else {
+		return sharedVarsP->current_toot_content_record;
+	}
 }
 
 UInt16 SaturatingDecrement(UInt16 base) {

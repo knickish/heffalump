@@ -65,7 +65,9 @@ MENU ID MainMenuBar
 BEGIN
     PULLDOWN "Mastodon"
     BEGIN
-        MENUITEM "Compose Toot"    OptionsComposeToot
+        MENUITEM "Compose Toot"     OptionsComposeToot
+        MENUITEM "View My Toots"    OptionsViewSelfToots
+        MENUITEM "View Timeline"    OptionsViewTimeline
     END
     PULLDOWN "Edit"
     BEGIN

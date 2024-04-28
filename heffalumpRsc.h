@@ -22,6 +22,8 @@
 #define EditGrafittiHelp        1006
 #define OptionsAboutHeffalump   1007
 #define OptionsComposeToot      1008
+#define OptionsViewSelfToots    1009
+#define OptionsViewTimeline     1010
 
 #define AboutForm               1001
 #define AboutOKButton           1000
