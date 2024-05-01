@@ -55,9 +55,7 @@ static Boolean HandleEditOptions(UInt16 menuID, FieldType* field) {
 static HeffalumpPrefs* LoadPrefs(void)
 {
 	HeffalumpPrefs *prefs;
-	UInt16 latestPrefSize;
-
-	latestPrefSize = sizeof(HeffalumpPrefs);
+	UInt16 latestPrefSize = sizeof(HeffalumpPrefs);
 
 	prefs = MemPtrNew(latestPrefSize);
 	if (!prefs)
@@ -69,17 +67,10 @@ static HeffalumpPrefs* LoadPrefs(void)
 	if (PrefGetAppPreferences(heffCreatorID, 0, prefs, &latestPrefSize, true) == noPreferenceFound)
 	{
 		FrmCustomAlert(DebugAlert1, "no preferences found, creating one instead", NULL, NULL);
-		PrefSetAppPreferences(heffCreatorID, 0, 0, prefs, sizeof(HeffalumpPrefs), true);
+		PrefSetAppPreferences(heffCreatorID, 0, 0, prefs, latestPrefSize, true);
 		MemPtrFree(prefs);
-		FrmCustomAlert(DebugAlert1, "returning", NULL, NULL);
 		return NULL;
 	}
-
-	char* debug = MemPtrNew(150);
-	MemSet(debug, 150, 0);
-	StrPrintF(debug, "pref contents: %d", &prefs->home_timeline_len);
-	FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
-	MemPtrFree(debug);
 
 	return prefs;
 }
@@ -173,26 +164,40 @@ static void ChangeToot(UInt16 requested) {
 	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
 	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
 
-	if (
-		(
-			sharedVarsP->current_toot_content_record != requested
-			|| sharedVarsP->current_toot_content_handle == NULL
-		) 
-		&& requested < sharedVarsP->toot_content_record_count
-	) 
+	if (requested < sharedVarsP->toot_content_record_count) 
 	{
 		DmOpenRef content = globalsSlotVal(GLOBALS_SLOT_CONTENT_DB);
 		DmOpenRef author = globalsSlotVal(GLOBALS_SLOT_AUTHOR_DB);
 		ErrFatalDisplayIf (!sharedVarsP || !author || !content, "Invalid globals state");
 		ErrFatalDisplayIf (!DmNumRecords(content) || !DmNumRecords(author), "No toots to read");
 
+		if (sharedVarsP->viewing_self_timeline) {
+			// trying to view self posts, make sure we're in bounds
+			if (
+				requested < sharedVarsP->prefs->home_timeline_len 
+				|| requested >= (
+					sharedVarsP->prefs->home_timeline_len 
+					+ sharedVarsP->prefs->self_timeline_len
+				)
+			) {
+				return;
+			}
+		} else {
+			// trying to view non-self posts, make sure we're in bounds
+			if (requested >= sharedVarsP->prefs->home_timeline_len) {
+				return;
+			}
+		}
+
 		// attempt to lock new content, if it's not available, do nothing and return
-		MemHandle content_handle = DmGetRecord(content, requested);
+		MemHandle content_handle = DmQueryRecord(content, requested);
 		if (!content_handle) {
+			// FrmCustomAlert(DebugAlert1, "failed to get handle", NULL, NULL);
 			return;
 		}
 		TootContent* content_inst = (TootContent*) MemHandleLock(content_handle);
 		if (!content_inst) {
+			// FrmCustomAlert(DebugAlert1, "failed to lock handle", NULL, NULL);
 			return;
 		}
 
@@ -205,9 +210,21 @@ static void ChangeToot(UInt16 requested) {
 		// clear current content
 		if (sharedVarsP->current_toot_content_ptr) {
 			ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_content_handle), "error while freeing memory");
-			DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
-			DmReleaseRecord(content, sharedVarsP->self_toot_content_record, false);
+			if (sharedVarsP->viewing_self_timeline || sharedVarsP->current_toot_content_record != requested ) {
+				DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
+			}
+			// FrmCustomAlert(DebugAlert1, "before", NULL, NULL);
+			
+			if (!sharedVarsP->viewing_self_timeline || sharedVarsP->self_toot_content_record != requested ) {
+				// debug = MemPtrNew(150);
+				// MemSet(debug, 150, 0);
+				// StrPrintF(debug, "attempting to release record: %u from content with record count: %u", sharedVarsP->self_toot_content_record, DmNumRecords(content));
+				// FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
+				// MemPtrFree(debug);
+				DmReleaseRecord(content, sharedVarsP->self_toot_content_record, false);
+			}
 		}
+
 
 		// load new content
 		if (sharedVarsP->viewing_self_timeline){
@@ -220,7 +237,7 @@ static void ChangeToot(UInt16 requested) {
 		sharedVarsP->current_toot_content_handle = content_handle;
 
 		// load new author
-		MemHandle author_handle = DmGetRecord(author, content_inst->author);
+		MemHandle author_handle = DmQueryRecord(author, content_inst->author);
 		if (!author_handle) {
 			ErrFatalDisplayIf(!author_handle, "Failed to load toot author");
 		}
@@ -249,10 +266,24 @@ static void LoadTimelineToot(FormType* form, FieldType* content) {
 		ShowButtonInForm(form, MainExpandButton);
 	}
 
-	if (sharedVarsP->current_toot_content_record == 0) {
+	if (
+		(!sharedVarsP->viewing_self_timeline && sharedVarsP->current_toot_content_record == 0) ||
+		(sharedVarsP->viewing_self_timeline && sharedVarsP->self_toot_content_record == sharedVarsP->prefs->home_timeline_len)
+		) 
+	{
 		HideButtonInForm(form, MainPrevButton);
 	} else {
 		ShowButtonInForm(form, MainPrevButton);
+	}
+
+	if (
+		(!sharedVarsP->viewing_self_timeline && sharedVarsP->current_toot_content_record == SaturatingDecrement(sharedVarsP->prefs->home_timeline_len)) ||
+		(sharedVarsP->viewing_self_timeline && sharedVarsP->self_toot_content_record == SaturatingDecrement(sharedVarsP->prefs->home_timeline_len + sharedVarsP->prefs->self_timeline_len))
+		) 
+	{
+		HideButtonInForm(form, MainNextButton);
+	} else {
+		ShowButtonInForm(form, MainNextButton);
 	}
 
 	if(!content_handle) {
@@ -581,7 +612,6 @@ static Boolean MainFormHandleEvent(EventType* event) {
 		case menuEvent:
 			form = FrmGetActiveForm();
 			handled = MainMenuHandleEvent(event->data.menu.itemID);
-			ChangeToot(CurrentTootRecordNumber());
 			LoadTimelineToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)));
 			break;
 		
@@ -703,7 +733,9 @@ static Boolean ComposeTootFormHandleEvent(EventType* event) {
 						MemHandle content_handle = FldGetTextHandle(content);
 						FldSetTextHandle(content, NULL);
 						char* content_str = (char*) MemHandleLock(content_handle);
-						UInt16* is_reply_to = sharedVarsP->toot_is_reply_to_current ? &(sharedVarsP->current_toot_author_record) : NULL;
+						UInt16* currently_viewing = sharedVarsP->viewing_self_timeline ? 
+							&(sharedVarsP->self_toot_content_record) : &(sharedVarsP->current_toot_content_record);
+						UInt16* is_reply_to = sharedVarsP->toot_is_reply_to_current ? currently_viewing : NULL;
 						TootContent* to_write = TootContentConstructor(StrLen(content_str), is_reply_to);
 						#ifdef HEFFALUMP_TESTING
 						ErrNonFatalDisplayIf(StrLen(content_str) == 0, "Composed toot has zero len");
@@ -802,7 +834,6 @@ static void MakeSharedVariables(void)
 
 	HeffalumpPrefs* prefs = LoadPrefs();
 	ErrNonFatalDisplayIf( prefs == NULL, "No preferences loaded, please hotsync again" );
-	FrmCustomAlert(DebugAlert1, "returned", NULL, NULL);
 
 	sharedVars->prefs = prefs;
 	sharedVars->self_toot_content_record = prefs->home_timeline_len;
