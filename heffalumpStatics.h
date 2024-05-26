@@ -23,9 +23,13 @@ static inline void* globalsSlotVal(UInt8 slotID)	//[0] is reserved
     return a5[slotID];
 }
 
-#define GLOBALS_SLOT_SHARED_VARS			1
-#define GLOBALS_SLOT_AUTHOR_DB              2
-#define GLOBALS_SLOT_CONTENT_DB             3
-#define GLOBALS_SLOT_WRITES_DB              4
+#define GLOBALS_SLOT_SHARED_VARS    1
+#define GLOBALS_SLOT_PREFS          2
+
+#define GLOBALS_SLOT_AUTHOR_DB      3
+#define GLOBALS_SLOT_CONTENT_DB     4
+#define GLOBALS_SLOT_WRITES_DB      5
+
+
 
 #endif

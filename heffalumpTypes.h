@@ -7,6 +7,7 @@
 typedef struct TootContent_s {
     UInt16  author;
     UInt16  is_reply_to;
+    UInt16  replies_start;
     UInt16  content_len;
     char    toot_content[];
 } TootContent;
@@ -16,6 +17,14 @@ typedef struct TootAuthor_s {
     char  author_name[];
 } TootAuthor;
 
+typedef struct HeffalumpPrefs_s {
+    UInt16  home_timeline_len;
+    UInt16  self_timeline_len;
+    UInt16  reply_content_len;
+} HeffalumpPrefs;
+
+
+
 typedef struct HeffalumpState_s {
     UInt16          current_toot_author_record;
     UInt16          current_toot_content_record;
@@ -24,11 +33,20 @@ typedef struct HeffalumpState_s {
     TootAuthor*     current_toot_author_ptr;
     TootContent*    current_toot_content_ptr;
 
+    UInt16          self_toot_content_record;
+
     // pagination
     UInt8           current_toot_page_index;
 
     UInt16          toot_content_record_count;
     Boolean         toot_is_reply_to_current;
+    Boolean         viewing_self_timeline;
+    Boolean         viewing_replies;
+    UInt16          viewing_replies_to;
+
+    RectangleType*  inverted_replies_button;
+
+    HeffalumpPrefs* prefs;
 } HeffalumpState;
 
 typedef enum  {

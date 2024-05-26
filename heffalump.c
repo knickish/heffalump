@@ -1,7 +1,7 @@
-// #define ERROR_CHECK_FULL
+#include "heffalumpHelpers.h"
 #include "heffalumpRsc.h"
-#include "heffalumpTypes.h"
 #include "heffalumpStatics.h"
+#include "heffalumpTypes.h"
 #include <PalmOS.h>
 #include <PalmOSGlue.h>
 #include <stddef.h>
@@ -49,36 +49,29 @@ static Boolean HandleEditOptions(UInt16 menuID, FieldType* field) {
 	return handled;
 }
 
-static void SetLabelInForm(FormType *form, UInt16 labelID, const char *newText)
+
+
+static HeffalumpPrefs* LoadPrefs(void)
 {
-  UInt16 labelObjectIndex = FrmGetObjectIndex(form, labelID);
+	HeffalumpPrefs *prefs;
+	UInt16 latestPrefSize = sizeof(HeffalumpPrefs);
 
-  FrmHideObject(form, labelObjectIndex);
-  if (newText != NULL) {
-	FrmCopyLabel(form, labelID, newText);
-  	FrmShowObject(form, labelObjectIndex);
-  }
-}
+	prefs = MemPtrNew(latestPrefSize);
+	if (!prefs)
+	{
+		SysFatalAlert("Failed to allocate memory to store preferences!");
+	}
+	MemSet(prefs, latestPrefSize, 0);
 
-static void HideButtonInForm(FormType *form, UInt16 buttonID) {
-	UInt16 buttonObjectIndex = FrmGetObjectIndex(form, buttonID);
-	FrmHideObject(form, buttonObjectIndex);
-}
+	if (PrefGetAppPreferences(heffCreatorID, 0, prefs, &latestPrefSize, true) == noPreferenceFound)
+	{
+		// FrmCustomAlert(DebugAlert1, "no preferences found, creating one instead", NULL, NULL);
+		PrefSetAppPreferences(heffCreatorID, 0, 0, prefs, latestPrefSize, true);
+		MemPtrFree(prefs);
+		return NULL;
+	}
 
-static void ShowButtonInForm(FormType *form, UInt16 buttonID) {
-	UInt16 buttonObjectIndex = FrmGetObjectIndex(form, buttonID);
-	FrmShowObject(form, buttonObjectIndex);
-}
-
-static UInt16 CurrentTootRecordNumber() {
-	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
-	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
-
-	return sharedVarsP->current_toot_content_record;
-}
-
-UInt16 SaturatingDecrement(UInt16 base) {
-	return base == 0 ? base : base - 1;
+	return prefs;
 }
 
 static TootContent* TootContentConstructor(UInt16 length, UInt16* is_reply_to) {
@@ -92,10 +85,6 @@ static TootContent* TootContentConstructor(UInt16 length, UInt16* is_reply_to) {
 	}
 	ret->content_len = length;
 	return ret;
-}
-
-static Boolean IsSpace(char c) {
-	return c == '\t' || c == ' ';
 }
 
 static CharOffsets GetCharOffsetsOfPage(UInt8 page_number, int rows, int available_width) {
@@ -174,28 +163,84 @@ static void ChangeToot(UInt16 requested) {
 	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
 	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
 
-	if (
-		(
-			sharedVarsP->current_toot_content_record != requested
-			|| sharedVarsP->current_toot_content_handle == NULL
-		) 
-		&& requested < sharedVarsP->toot_content_record_count
-	) 
+	if (requested < sharedVarsP->toot_content_record_count) 
 	{
 		DmOpenRef content = globalsSlotVal(GLOBALS_SLOT_CONTENT_DB);
 		DmOpenRef author = globalsSlotVal(GLOBALS_SLOT_AUTHOR_DB);
 		ErrFatalDisplayIf (!sharedVarsP || !author || !content, "Invalid globals state");
 		ErrFatalDisplayIf (!DmNumRecords(content) || !DmNumRecords(author), "No toots to read");
 
+		// FrmCustomAlert(DebugAlert1, "1", NULL, NULL);
+
+		if (sharedVarsP->viewing_self_timeline) {
+			// trying to view self posts, make sure we're in bounds
+			if (
+				requested < sharedVarsP->prefs->home_timeline_len 
+				|| requested >= (
+					sharedVarsP->prefs->home_timeline_len 
+					+ sharedVarsP->prefs->self_timeline_len
+				)
+			) {
+				return;
+			}
+		} else if (sharedVarsP->viewing_replies) {
+			if (
+				(requested < (sharedVarsP->prefs->home_timeline_len + sharedVarsP->prefs->self_timeline_len))
+				|| requested >= (sharedVarsP->prefs->home_timeline_len + sharedVarsP->prefs->self_timeline_len + sharedVarsP->prefs->reply_content_len)
+			) {
+				return;
+			}
+		} else {
+			// trying to view non-self posts, make sure we're in bounds
+			if (requested >= sharedVarsP->prefs->home_timeline_len) {
+				return;
+			}
+		}
+
+		// FrmCustomAlert(DebugAlert1, "2", NULL, NULL);
+
 		// attempt to lock new content, if it's not available, do nothing and return
-		MemHandle content_handle = DmGetRecord(content, requested);
+		MemHandle content_handle = DmQueryRecord(content, requested);
 		if (!content_handle) {
+			// FrmCustomAlert(DebugAlert1, "failed to get handle", NULL, NULL);
 			return;
 		}
+
+		// FrmCustomAlert(DebugAlert1, "3", NULL, NULL);
+		
 		TootContent* content_inst = (TootContent*) MemHandleLock(content_handle);
-		if (!content_inst) {
+		if (sharedVarsP->viewing_replies && (sharedVarsP->viewing_replies_to != content_inst->is_reply_to)) {
+			#ifdef HEFFALUMP_TESTING
+			{
+				// char* debug = MemPtrNew(150);
+				// MemSet(debug, 150, 0);
+				// StrPrintF(
+				// 	debug, 
+				// 	"viewing_replies_to: %u\ncontent_inst->is_reply_to: %u", 
+				// 	sharedVarsP->viewing_replies_to,
+				// 	content_inst->is_reply_to
+				// );
+				// FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
+				// MemPtrFree(debug);
+				// FrmCustomAlert(DebugAlert1, content_inst->toot_content, NULL, NULL);
+				
+			}
+			#endif // HEFFALUMP_TESTING
+
+			// we're viewing replies, and this new toot isn't a reply to the same one
+			ErrFatalDisplayIf(MemHandleUnlock(content_handle), "error while freeing memory");
+			DmReleaseRecord(content, requested, false);
 			return;
 		}
+
+		// FrmCustomAlert(DebugAlert1, "4", NULL, NULL);
+
+		if (!content_inst) {
+			// FrmCustomAlert(DebugAlert1, "failed to lock handle", NULL, NULL);
+			return;
+		}
+
+		// FrmCustomAlert(DebugAlert1, "5", NULL, NULL);
 
 		// clear current author
 		if (sharedVarsP->current_toot_author_ptr) {
@@ -206,16 +251,34 @@ static void ChangeToot(UInt16 requested) {
 		// clear current content
 		if (sharedVarsP->current_toot_content_ptr) {
 			ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_content_handle), "error while freeing memory");
-			DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
+			if (sharedVarsP->viewing_self_timeline || sharedVarsP->current_toot_content_record != requested ) {
+				DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
+			}
+			// FrmCustomAlert(DebugAlert1, "before", NULL, NULL);
+			
+			if (!sharedVarsP->viewing_self_timeline || sharedVarsP->self_toot_content_record != requested ) {
+				// debug = MemPtrNew(150);
+				// MemSet(debug, 150, 0);
+				// StrPrintF(debug, "attempting to release record: %u from content with record count: %u", sharedVarsP->self_toot_content_record, DmNumRecords(content));
+				// FrmCustomAlert(DebugAlert1, debug, NULL, NULL);
+				// MemPtrFree(debug);
+				DmReleaseRecord(content, sharedVarsP->self_toot_content_record, false);
+			}
 		}
 
+
 		// load new content
-		sharedVarsP->current_toot_content_record = requested;
+		if (sharedVarsP->viewing_self_timeline){
+			sharedVarsP->self_toot_content_record = requested;
+		} else {
+			sharedVarsP->current_toot_content_record = requested;
+		}
+		
 		sharedVarsP->current_toot_content_ptr = content_inst;
 		sharedVarsP->current_toot_content_handle = content_handle;
 
 		// load new author
-		MemHandle author_handle = DmGetRecord(author, content_inst->author);
+		MemHandle author_handle = DmQueryRecord(author, content_inst->author);
 		if (!author_handle) {
 			ErrFatalDisplayIf(!author_handle, "Failed to load toot author");
 		}
@@ -244,10 +307,30 @@ static void LoadTimelineToot(FormType* form, FieldType* content) {
 		ShowButtonInForm(form, MainExpandButton);
 	}
 
-	if (sharedVarsP->current_toot_content_record == 0) {
+	if (!sharedVarsP->viewing_replies && sharedVarsP->current_toot_content_ptr->replies_start == 0) {
+		HideButtonInForm(form, MainRepliesButton);
+	} else {
+		ShowButtonInForm(form, MainRepliesButton);
+	}
+
+	if (
+		(!sharedVarsP->viewing_self_timeline && sharedVarsP->current_toot_content_record == 0) ||
+		(sharedVarsP->viewing_self_timeline && sharedVarsP->self_toot_content_record == sharedVarsP->prefs->home_timeline_len)
+		) 
+	{
 		HideButtonInForm(form, MainPrevButton);
 	} else {
 		ShowButtonInForm(form, MainPrevButton);
+	}
+
+	if (
+		(!sharedVarsP->viewing_self_timeline && sharedVarsP->current_toot_content_record == SaturatingDecrement(sharedVarsP->prefs->home_timeline_len)) ||
+		(sharedVarsP->viewing_self_timeline && sharedVarsP->self_toot_content_record == SaturatingDecrement(sharedVarsP->prefs->home_timeline_len + sharedVarsP->prefs->self_timeline_len))
+		) 
+	{
+		HideButtonInForm(form, MainNextButton);
+	} else {
+		ShowButtonInForm(form, MainNextButton);
 	}
 
 	if(!content_handle) {
@@ -273,6 +356,8 @@ static void LoadTimelineToot(FormType* form, FieldType* content) {
 	MemPtrUnlock(content_str);
 	FldSetTextHandle(content, content_handle);
 	FldDrawField(content);
+
+	PaintRepliesButtonInversion(sharedVarsP, form);
 }
 
 static void LoadExpandedToot(FormType* form) {
@@ -283,7 +368,7 @@ static void LoadExpandedToot(FormType* form) {
 
 	SetLabelInForm(form, ExpandTootAuthorLabel, sharedVarsP->current_toot_author_ptr->author_name);
 
-	CharOffsets indices = GetCharOffsetsOfPage(sharedVarsP->current_toot_page_index, 10, 154);
+	CharOffsets indices = GetCharOffsetsOfPage(sharedVarsP->current_toot_page_index, 10, 152);
 	int end_char_index = indices.end;
 	int start_char_offset = indices.start;
 	if (
@@ -294,7 +379,7 @@ static void LoadExpandedToot(FormType* form) {
 			)
 		) {
 		sharedVarsP->current_toot_page_index -= 1;
-		indices = GetCharOffsetsOfPage(sharedVarsP->current_toot_page_index, 10, 156);
+		indices = GetCharOffsetsOfPage(sharedVarsP->current_toot_page_index, 10, 152);
 		end_char_index = indices.end;
 		start_char_offset = indices.start;
 	}
@@ -333,7 +418,7 @@ static void LoadExpandedToot(FormType* form) {
 	FldDrawField(content);
 }
 
-static void MoonWriteAction(HeffalumpState* sharedVarsP, TootWriteType action , TootContent* content) {
+static void WriteAction(HeffalumpState* sharedVarsP, TootWriteType action , TootContent* content) {
 	DmOpenRef writes = globalsSlotVal(GLOBALS_SLOT_WRITES_DB);
 	if (!writes) return;
 	if (!sharedVarsP) return;
@@ -416,6 +501,8 @@ static Boolean MainMenuHandleEvent(UInt16 menuID) {
 
 	form = FrmGetActiveForm();
 	field = FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField));
+	HeffalumpState* sharedVarsP = (HeffalumpState*)globalsSlotVal(GLOBALS_SLOT_SHARED_VARS);
+	ErrFatalDisplayIf(!sharedVarsP, "shared variables are null");
 
 	switch (menuID) {
 		// case EditUndo:
@@ -446,6 +533,22 @@ static Boolean MainMenuHandleEvent(UInt16 menuID) {
 		case OptionsComposeToot:
 			MenuEraseStatus(0);
 			FrmGotoForm(ComposeTootForm);
+			handled = true;
+			break;
+
+		case OptionsViewTimeline:
+			MenuEraseStatus(0);
+
+			sharedVarsP->viewing_self_timeline = false;
+			ChangeToot(sharedVarsP->current_toot_content_record);
+			handled = true;
+			break;
+
+		case OptionsViewSelfToots:
+			MenuEraseStatus(0);
+
+			sharedVarsP->viewing_self_timeline = true;
+			ChangeToot(sharedVarsP->self_toot_content_record);
 			handled = true;
 			break;
 
@@ -513,7 +616,7 @@ static Boolean MainFormHandleEvent(EventType* event) {
 					case MainLikeButton:
 						action = Favorite;
 						// FrmCustomAlert(DebugAlert1, "Sending Favorite to Action", NULL, NULL);
-						MoonWriteAction(
+						WriteAction(
 							globalsSlotVal(GLOBALS_SLOT_SHARED_VARS),
 							action,
 							NULL
@@ -527,7 +630,7 @@ static Boolean MainFormHandleEvent(EventType* event) {
 						break;
 					case MainRepostButton:
 						action = Reblog;
-						MoonWriteAction(
+						WriteAction(
 							globalsSlotVal(GLOBALS_SLOT_SHARED_VARS),
 							action,
 							NULL
@@ -550,13 +653,35 @@ static Boolean MainFormHandleEvent(EventType* event) {
 						FrmGotoForm(ExpandTootForm);
 						handled = true;
 						break;
+					case MainRepliesButton:
+						{	
+							switch (sharedVarsP->viewing_replies) {
+								case true: // we're already viewing replies, go back to previous
+									sharedVarsP->viewing_replies = false;
+									ChangeToot(sharedVarsP->viewing_replies_to);
+									sharedVarsP->viewing_replies_to = 0;
+									break;
+								case false: // find the replies and show them
+									sharedVarsP->viewing_replies = true;
+									sharedVarsP->viewing_replies_to = sharedVarsP->current_toot_content_record;
+									ChangeToot(CurrentTootFirstReplyRecordNumber());
+									break;
+							}
+							handled = true;
+							form = FrmGetActiveForm();
+							ToggleRepliesButtonInversion(sharedVarsP, form);
+							LoadTimelineToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)));
+							break;
+						}
 					default:
 						break;
 				}
 				break;
 			}
 		case menuEvent:
+			form = FrmGetActiveForm();
 			handled = MainMenuHandleEvent(event->data.menu.itemID);
+			LoadTimelineToot(form, FrmGetObjectPtr(form, FrmGetObjectIndex(form, MainContentField)));
 			break;
 		
 		default:
@@ -677,13 +802,15 @@ static Boolean ComposeTootFormHandleEvent(EventType* event) {
 						MemHandle content_handle = FldGetTextHandle(content);
 						FldSetTextHandle(content, NULL);
 						char* content_str = (char*) MemHandleLock(content_handle);
-						UInt16* is_reply_to = sharedVarsP->toot_is_reply_to_current ? &(sharedVarsP->current_toot_author_record) : NULL;
+						UInt16* currently_viewing = sharedVarsP->viewing_self_timeline ? 
+							&(sharedVarsP->self_toot_content_record) : &(sharedVarsP->current_toot_content_record);
+						UInt16* is_reply_to = sharedVarsP->toot_is_reply_to_current ? currently_viewing : NULL;
 						TootContent* to_write = TootContentConstructor(StrLen(content_str), is_reply_to);
 						#ifdef HEFFALUMP_TESTING
 						ErrNonFatalDisplayIf(StrLen(content_str) == 0, "Composed toot has zero len");
 						#endif
 						StrNCopy(to_write->toot_content, (const char*) content_str, StrLen(content_str));
-						MoonWriteAction(sharedVarsP, action, to_write);
+						WriteAction(sharedVarsP, action, to_write);
 						MemPtrUnlock(content_str);
 						FldSetTextHandle(content, content_handle);
 						FrmGotoForm(MainForm);
@@ -774,6 +901,12 @@ static void MakeSharedVariables(void)
 	ErrFatalDisplayIf(!sharedVars, "Failed to allocate memory for shared variables");
 	MemSet(sharedVars, sizeof(HeffalumpState), 0);
 
+	HeffalumpPrefs* prefs = LoadPrefs();
+	ErrNonFatalDisplayIf( prefs == NULL, "No preferences loaded, please hotsync again" );
+
+	sharedVars->prefs = prefs;
+	sharedVars->self_toot_content_record = prefs->home_timeline_len;
+
 	*globalsSlotPtr(GLOBALS_SLOT_SHARED_VARS) = sharedVars;
 	*globalsSlotPtr(GLOBALS_SLOT_AUTHOR_DB) = NULL;
 	*globalsSlotPtr(GLOBALS_SLOT_CONTENT_DB) = NULL;
@@ -797,6 +930,12 @@ static void FreeSharedVariables(void)
 		sharedVarsP->current_toot_content_ptr = NULL;
 		ErrFatalDisplayIf(MemHandleUnlock(sharedVarsP->current_toot_content_handle)!=0, "error while freeing toot content handle");
 		DmReleaseRecord(content, sharedVarsP->current_toot_content_record, false);
+	}
+	if (sharedVarsP->prefs != NULL) {
+		ErrFatalDisplayIf(MemPtrFree(sharedVarsP->prefs)!=0, "error while freeing preferences");
+	}
+	if (sharedVarsP->inverted_replies_button != NULL) {
+		ErrFatalDisplayIf(MemPtrFree(sharedVarsP->inverted_replies_button)!=0, "error while freeing rect");
 	}
 
 	ErrFatalDisplayIf(MemPtrFree(sharedVarsP)!=0, "error while freeing shared variables");
@@ -866,18 +1005,20 @@ static Err AppStart(void) {
 	}
 	*globalsSlotPtr(GLOBALS_SLOT_WRITES_DB) = writes;
 
-	ErrNonFatalDisplayIf( DmNumRecords(author) == 0 && DmNumRecords(content) == 0, "No toots loaded, please hotsync again" );
+	if (DmNumRecords(author) == 0 && DmNumRecords(content) == 0) {
+		ErrFatalDisplay("No toots loaded, please hotsync again" );
+		AppStop();
+		return -1;
+	}
 
 	state->toot_content_record_count = DmNumRecords(content);
 
-	#ifdef HEFFALUMP_TESTING
 	LocalID writeDbId = DmFindDatabase(0, tootWritesDBName);
 	UInt16 attributes = 0;
 	ErrNonFatalDisplayIf(writeDbId == 0, "Failed to find localID for write db");
 	ErrNonFatalDisplayIf(errNone != DmDatabaseInfo(0, writeDbId, NULL, &attributes, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "Failed to rerive db info");
 	attributes |= dmHdrAttrBackup;
 	ErrNonFatalDisplayIf(errNone != DmSetDatabaseInfo(0, writeDbId, NULL, &attributes, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "failed to set db info");
-	#endif
 
 	#ifdef HEFFALUMP_NO_DB_DEV
 	if (DmNumRecords(author) == 0 && DmNumRecords(content) == 0) { // add info for test toots

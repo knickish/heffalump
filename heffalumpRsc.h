@@ -10,6 +10,7 @@
 #define MainPrevButton          1005
 #define MainNextButton          1006
 #define MainExpandButton        1007
+#define MainRepliesButton       1008
 #define MainContentSize         265
 
 #define MainMenuBar             1000
@@ -22,6 +23,8 @@
 #define EditGrafittiHelp        1006
 #define OptionsAboutHeffalump   1007
 #define OptionsComposeToot      1008
+#define OptionsViewSelfToots    1009
+#define OptionsViewTimeline     1010
 
 #define AboutForm               1001
 #define AboutOKButton           1000
