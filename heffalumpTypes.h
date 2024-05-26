@@ -41,7 +41,10 @@ typedef struct HeffalumpState_s {
     UInt16          toot_content_record_count;
     Boolean         toot_is_reply_to_current;
     Boolean         viewing_self_timeline;
-    Boolean         viewing_replies_to_current;
+    Boolean         viewing_replies;
+    UInt16          viewing_replies_to;
+
+    RectangleType*  inverted_replies_button;
 
     HeffalumpPrefs* prefs;
 } HeffalumpState;

@@ -10,6 +10,7 @@
 #define MainPrevButton          1005
 #define MainNextButton          1006
 #define MainExpandButton        1007
+#define MainRepliesButton       1008
 #define MainContentSize         265
 
 #define MainMenuBar             1000

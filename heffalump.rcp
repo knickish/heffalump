@@ -45,11 +45,14 @@ BEGIN
     BUTTON "Like" ID MainLikeButton
         AT (1 147 AUTO AUTO)
     BUTTON "Repost" ID MainRepostButton
-        AT (PrevRight+5 PrevTop AUTO AUTO)
+        AT (PrevRight+3 PrevTop AUTO AUTO)
     BUTTON "Reply" ID MainReplyButton
-        AT (PrevRight+5 PrevTop AUTO AUTO)
+        AT (PrevRight+3 PrevTop AUTO AUTO)
     BUTTON "..." ID MainExpandButton
-        AT (PrevRight+5 PrevTop AUTO AUTO)
+        AT (PrevRight+2 PrevTop-1 AUTO AUTO)
+        NOFRAME
+    BUTTON "@" ID MainRepliesButton
+        AT (PrevRight-4 PrevTop AUTO AUTO)
         NOFRAME
     BUTTON "\001" ID MainPrevButton
         AT (142 143 AUTO AUTO)
