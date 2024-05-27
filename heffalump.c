@@ -172,7 +172,7 @@ static void ChangeToot(UInt16 requested) {
 
 		// FrmCustomAlert(DebugAlert1, "1", NULL, NULL);
 
-		if (sharedVarsP->viewing_self_timeline) {
+		if (sharedVarsP->viewing_self_timeline && !sharedVarsP->viewing_replies) {
 			// trying to view self posts, make sure we're in bounds
 			if (
 				requested < sharedVarsP->prefs->home_timeline_len 
@@ -663,7 +663,7 @@ static Boolean MainFormHandleEvent(EventType* event) {
 									break;
 								case false: // find the replies and show them
 									sharedVarsP->viewing_replies = true;
-									sharedVarsP->viewing_replies_to = sharedVarsP->current_toot_content_record;
+									sharedVarsP->viewing_replies_to = CurrentTootRecordNumber();
 									ChangeToot(CurrentTootFirstReplyRecordNumber());
 									break;
 							}
