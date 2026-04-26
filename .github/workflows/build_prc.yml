@@ -19,7 +19,7 @@ jobs:
               -e PRC_NAME="heffalump" \
               -e PRC_CREATOR="HEFf" \
               knickish/palm_docker:latest
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: heffalump.prc
         path: /tmp/heffalump_artifacts/heffalump.prc
