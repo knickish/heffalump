@@ -800,22 +800,31 @@ static Boolean ComposeTootFormHandleEvent(EventType* event) {
 						form = FrmGetActiveForm();
 						FieldType* content = FrmGetObjectPtr(form, FrmGetObjectIndex(form, ComposeTootContentField));
 						MemHandle content_handle = FldGetTextHandle(content);
-						FldSetTextHandle(content, NULL);
+						if (content_handle == NULL) {
+							handled = true;
+							break;
+						}
+						
 						char* content_str = (char*) MemHandleLock(content_handle);
-						UInt16* currently_viewing = sharedVarsP->viewing_self_timeline ? 
+						if (content_str == NULL || StrLen(content_str) == 0) {
+							// Composed toot has zero len
+							MemPtrUnlock(content_str);
+							FldSetTextHandle(content, content_handle);
+						} else {
+							FldSetTextHandle(content, NULL);
+							UInt16* currently_viewing = sharedVarsP->viewing_self_timeline ? 
 							&(sharedVarsP->self_toot_content_record) : &(sharedVarsP->current_toot_content_record);
-						UInt16* is_reply_to = sharedVarsP->toot_is_reply_to_current ? currently_viewing : NULL;
-						TootContent* to_write = TootContentConstructor(StrLen(content_str), is_reply_to);
-						#ifdef HEFFALUMP_TESTING
-						ErrNonFatalDisplayIf(StrLen(content_str) == 0, "Composed toot has zero len");
-						#endif
-						StrNCopy(to_write->toot_content, (const char*) content_str, StrLen(content_str));
-						WriteAction(sharedVarsP, action, to_write);
-						MemPtrUnlock(content_str);
-						FldSetTextHandle(content, content_handle);
-						FrmGotoForm(MainForm);
+							UInt16* is_reply_to = sharedVarsP->toot_is_reply_to_current ? currently_viewing : NULL;
+							TootContent* to_write = TootContentConstructor(StrLen(content_str), is_reply_to);
+							StrNCopy(to_write->toot_content, (const char*) content_str, StrLen(content_str));
+							WriteAction(sharedVarsP, action, to_write);
+							MemPtrUnlock(content_str);
+							FldSetTextHandle(content, content_handle);
+							FrmGotoForm(MainForm);
+						}
 						handled = true;
 						break;
+						
 					case ComposeTootCancelButton:
 						FrmGotoForm(MainForm);
 						handled = true;
